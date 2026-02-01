@@ -1,7 +1,7 @@
-import { AligoModule } from '@lib/aligo';
 import { LoggerModule } from '@lib/logger';
 import { MailModule } from '@lib/mail';
 import { RedisModule } from '@lib/redis';
+import { SmsModule } from '@lib/sms';
 import { TemplatesModule } from '@lib/templates';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -29,7 +29,7 @@ import { VerifyService } from './verify.service';
         },
       }),
     }),
-    AligoModule,
+    SmsModule,
     TemplatesModule,
   ],
   controllers: [VerifyController],

@@ -1,7 +1,7 @@
-import { AligoService } from '@lib/aligo';
 import { Loggable } from '@lib/logger';
 import { MailService } from '@lib/mail';
 import { CacheNotFoundException, RedisService } from '@lib/redis';
+import { SmsService } from '@lib/sms';
 import { TemplatesService } from '@lib/templates';
 import {
   BadRequestException,
@@ -43,7 +43,7 @@ export class VerifyService {
     private readonly jwtService: JwtService,
     private readonly redisService: RedisService,
     private readonly mailService: MailService,
-    private readonly aligoService: AligoService,
+    private readonly smsService: SmsService,
     private readonly templatesService: TemplatesService,
   ) {}
 
@@ -208,8 +208,6 @@ export class VerifyService {
         );
       }
     }
-    if (tel.country !== 'KR')
-      throw new BadRequestException('Not a South Korean phone number.');
 
     const phoneNumberVerificationCode: string = crypto
       .randomInt(1000000)
@@ -218,7 +216,10 @@ export class VerifyService {
 
     const msg = `인포팀 계정 인증코드: [${phoneNumberVerificationCode}] 공유하지 마십시오.`;
 
-    await this.aligoService.sendMessage(tel.formatNational(), msg);
+    if (tel.country !== 'KR')
+      await this.smsService.sendDomesticMessage(tel.formatNational(), msg);
+    else
+      await this.smsService.sendInternationalMessage(tel.format('E.164'), msg);
 
     await this.redisService.set<string>(
       phoneNumber,
