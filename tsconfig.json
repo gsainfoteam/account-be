@@ -32,8 +32,8 @@
       "@lib/prisma/*": ["libs/prisma/src/*"],
       "@lib/redis": ["libs/redis/src"],
       "@lib/redis/*": ["libs/redis/src/*"],
-      "@lib/aligo": ["libs/aligo/src"],
-      "@lib/aligo/*": ["libs/aligo/src/*"],
+      "@lib/sms": ["libs/sms/src"],
+      "@lib/sms/*": ["libs/sms/src/*"],
       "@lib/templates": ["libs/templates/src"],
       "@lib/templates/*": ["libs/templates/src/*"]
     }

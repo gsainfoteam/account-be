@@ -1,3 +1,4 @@
+import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
 import { HttpService } from '@nestjs/axios';
 import {
   Injectable,
@@ -9,8 +10,8 @@ import { AxiosError } from 'axios';
 import { catchError, firstValueFrom } from 'rxjs';
 
 @Injectable()
-export class AligoService {
-  private readonly logger = new Logger(AligoService.name);
+export class SmsService {
+  private readonly logger = new Logger(SmsService.name);
   private readonly aligoApiUrl =
     this.configService.getOrThrow<string>('ALIGO_API_URL');
   private readonly aligoApiKey =
@@ -19,12 +20,23 @@ export class AligoService {
     this.configService.getOrThrow<string>('ALIGO_API_ID');
   private readonly aligoApiSender =
     this.configService.getOrThrow<string>('ALIGO_API_SENDER');
+  private readonly snsClient = new SNSClient({
+    region: this.configService.getOrThrow<string>('AWS_SNS_REGION'),
+    credentials: {
+      accessKeyId: this.configService.getOrThrow<string>(
+        'AWS_SNS_ACCESS_KEY_ID',
+      ),
+      secretAccessKey: this.configService.getOrThrow<string>(
+        'AWS_SNS_SECRET_ACCESS_KEY',
+      ),
+    },
+  });
   constructor(
     private readonly configService: ConfigService,
     private readonly httpService: HttpService,
   ) {}
 
-  async sendMessage(phoneNumber: string, msg: string): Promise<void> {
+  async sendDomesticMessage(phoneNumber: string, msg: string): Promise<void> {
     const body = new URLSearchParams();
     body.append('key', this.aligoApiKey);
     body.append('user_id', this.aligoApiId);
@@ -53,5 +65,25 @@ export class AligoService {
       this.logger.error(`Aligo SMS send error: ${result_code} ${message}`);
       throw new InternalServerErrorException('failed to send SMS');
     }
+  }
+
+  async sendInternationalMessage(
+    phoneNumber: string,
+    msg: string,
+  ): Promise<void> {
+    const command = new PublishCommand({
+      Message: msg,
+      PhoneNumber: phoneNumber,
+      MessageAttributes: {
+        'AWS.SNS.SMS.SMSType': {
+          DataType: 'String',
+          StringValue: 'Transactional',
+        },
+      },
+    });
+    await this.snsClient.send(command).catch((error) => {
+      this.logger.error(`failed to send SMS via SNS: ${error}`);
+      throw new InternalServerErrorException('failed to send SMS');
+    });
   }
 }
