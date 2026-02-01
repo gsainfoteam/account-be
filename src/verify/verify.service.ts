@@ -214,12 +214,13 @@ export class VerifyService {
       .toString()
       .padStart(6, '0');
 
-    const msg = `인포팀 계정 인증코드: [${phoneNumberVerificationCode}] 공유하지 마십시오.`;
-
-    if (tel.country === 'KR')
+    if (tel.country === 'KR') {
+      const msg = `인포팀 계정 인증코드: [${phoneNumberVerificationCode}] 공유하지 마십시오.`;
       await this.smsService.sendDomesticMessage(tel.formatNational(), msg);
-    else
+    } else {
+      const msg = `Infoteam Account verification code: [${phoneNumberVerificationCode}]. Do not share this code with anyone.`;
       await this.smsService.sendInternationalMessage(tel.format('E.164'), msg);
+    }
 
     await this.redisService.set<string>(
       phoneNumber,
