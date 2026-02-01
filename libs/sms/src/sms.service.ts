@@ -74,6 +74,12 @@ export class SmsService {
     const command = new PublishCommand({
       Message: msg,
       PhoneNumber: phoneNumber,
+      MessageAttributes: {
+        'AWS.SNS.SMS.SMSType': {
+          DataType: 'String',
+          StringValue: 'Transactional',
+        },
+      },
     });
     await this.snsClient.send(command).catch((error) => {
       this.logger.error(`failed to send SMS via SNS: ${error}`);
