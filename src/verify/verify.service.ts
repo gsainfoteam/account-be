@@ -216,7 +216,7 @@ export class VerifyService {
 
     const msg = `인포팀 계정 인증코드: [${phoneNumberVerificationCode}] 공유하지 마십시오.`;
 
-    if (tel.country !== 'KR')
+    if (tel.country === 'KR')
       await this.smsService.sendDomesticMessage(tel.formatNational(), msg);
     else
       await this.smsService.sendInternationalMessage(tel.format('E.164'), msg);
