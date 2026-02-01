@@ -73,22 +73,6 @@ export class VerifyController {
     summary: 'return key for verifying student id',
     description:
       'verify student id using birth date and name for signing up and return uuid key',
-    deprecated: true,
-  })
-  @ApiOkResponse({ description: 'success', type: VerifyStudentIdResDto })
-  @ApiNotFoundResponse({ description: 'Student id is not found' })
-  @ApiInternalServerErrorResponse({ description: 'server error' })
-  @Post('/studentId')
-  async verifyStudentIdLegacy(
-    @Body() body: VerifyStudentIdDto,
-  ): Promise<VerifyStudentIdResDto> {
-    return await this.verifyService.verifyStudentId(body);
-  }
-
-  @ApiOperation({
-    summary: 'return key for verifying student id',
-    description:
-      'verify student id using birth date and name for signing up and return uuid key',
   })
   @ApiOkResponse({ description: 'success', type: VerifyStudentIdResDto })
   @ApiNotFoundResponse({ description: 'Student id is not found' })

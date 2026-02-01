@@ -125,25 +125,6 @@ export class UserController {
     summary: 'verify student id for original user',
     description:
       'verify student id using birth date and name for original user. If not error, it represents a successful save.',
-    deprecated: true,
-  })
-  @ApiBearerAuth('user:jwt')
-  @ApiOkResponse({ description: 'success' })
-  @ApiNotFoundResponse({ description: 'user is not found' })
-  @ApiInternalServerErrorResponse({ description: 'server error' })
-  @UseGuards(UserGuard)
-  @Post('/verify/studentId')
-  async verifyStudentIdLegacy(
-    @GetUser() user: User,
-    @Body() body: VerifyStudentIdDto,
-  ): Promise<void> {
-    return await this.userService.verifyStudentId(user.uuid, body);
-  }
-
-  @ApiOperation({
-    summary: 'verify student id for original user',
-    description:
-      'verify student id using birth date and name for original user. If not error, it represents a successful save.',
   })
   @ApiBearerAuth('user:jwt')
   @ApiOkResponse({ description: 'success' })
