@@ -263,8 +263,8 @@ export class OauthService {
         nonce: cache.nonce,
         scope: cache.scope.join(' '),
         profile: cache.scope.includes('profile') ? user.profile : undefined,
-        picture: cache.scope.includes('profile') ? user.picture : undefined,
-        name: cache.scope.includes('profile') ? user.name : undefined,
+        picture: cache.scope.includes('picture') ? user.picture : undefined,
+        name: cache.scope.includes('name') ? user.name : undefined,
         email: cache.scope.includes('email') ? user.email : undefined,
         student_id: cache.scope.includes('student_id')
           ? user.studentId
@@ -353,12 +353,10 @@ export class OauthService {
         profile: refreshTokenData.scopes.includes('profile')
           ? user.profile
           : undefined,
-        picture: refreshTokenData.scopes.includes('profile')
+        picture: refreshTokenData.scopes.includes('picture')
           ? user.picture
           : undefined,
-        name: refreshTokenData.scopes.includes('profile')
-          ? user.name
-          : undefined,
+        name: refreshTokenData.scopes.includes('name') ? user.name : undefined,
         email: refreshTokenData.scopes.includes('email')
           ? user.email
           : undefined,
@@ -490,9 +488,9 @@ export class OauthService {
 
     return {
       sub: user.uuid,
-      name: tokenData.scope.includes('profile') ? user.name : undefined,
+      name: tokenData.scope.includes('name') ? user.name : undefined,
       profile: tokenData.scope.includes('profile') ? user.profile : undefined,
-      picture: tokenData.scope.includes('profile') ? user.picture : undefined,
+      picture: tokenData.scope.includes('picture') ? user.picture : undefined,
       email: tokenData.scope.includes('email') ? user.email : undefined,
       studentId: tokenData.scope.includes('student_id')
         ? user.studentId
