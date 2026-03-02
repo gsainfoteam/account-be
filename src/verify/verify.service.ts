@@ -147,7 +147,10 @@ export class VerifyService {
   async verifyStudentId(
     dto: VerifyStudentIdDto,
   ): Promise<VerifyStudentIdResDto> {
-    const studentId = await this.getStudentId(dto);
+    const studentId = await this.getStudentId(
+      dto.firstName ?? dto.name,
+      dto.birthDate,
+    );
 
     const payload: VerificationJwtPayloadType = {
       iss: this.configService.getOrThrow<string>('JWT_ISSUER'),
@@ -160,7 +163,7 @@ export class VerifyService {
     };
   }
 
-  async getStudentId({ name, birthDate }: VerifyStudentIdDto): Promise<string> {
+  async getStudentId(name: string, birthDate: string): Promise<string> {
     const formData = new URLSearchParams();
     formData.append('name', name);
     formData.append('birth_dt', birthDate);

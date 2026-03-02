@@ -1,6 +1,6 @@
 import { IsGistEmail } from '@lib/global';
 import { BadRequestException } from '@nestjs/common';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsEmail, IsString } from 'class-validator';
 
@@ -54,6 +54,10 @@ export class VerifyCodeDto {
 }
 
 export class VerifyStudentIdDto {
+  @ApiPropertyOptional({ description: 'first name (외국인용)' })
+  @IsString()
+  firstName?: string;
+
   @ApiProperty({ description: '이름' })
   @IsString()
   name: string;
