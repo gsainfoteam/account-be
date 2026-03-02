@@ -57,6 +57,10 @@ export class VerifyStudentIdDto {
   @ApiPropertyOptional({ description: 'first name (외국인용)' })
   @IsOptional()
   @IsString()
+  @Transform(
+    ({ value }: { value: string }) =>
+      value.charAt(0).toUpperCase() + value.slice(1).toLowerCase(),
+  )
   firstName?: string;
 
   @ApiProperty({ description: '이름' })
