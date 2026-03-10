@@ -243,7 +243,23 @@ export class UserService {
    * issue a new password to the user
    * @param param0 it contains email
    */
-  async issuePassword({ email }: IssueUserSecretDto): Promise<void> {
+  async issuePassword({
+    email,
+    emailVerificationJwtToken,
+  }: IssueUserSecretDto): Promise<void> {
+    const emailPayload: VerificationJwtPayloadType =
+      await this.verifyService.validateJwtToken(emailVerificationJwtToken);
+
+    if (emailPayload.hint !== 'email') {
+      this.logger.debug('verification hint is not email');
+      throw new ForbiddenException('verification hint is not email');
+    }
+
+    if (emailPayload.sub !== email) {
+      this.logger.debug('verification jwt token not valid');
+      throw new ForbiddenException('verification jwt token not valid');
+    }
+
     const user = await this.userRepository.findUserByEmail(email);
     const newPassword = crypto.randomBytes(18).toString('base64');
     await this.mailService.sendEmail(
