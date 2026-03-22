@@ -41,6 +41,9 @@ export class VerifyService {
     this.configService.getOrThrow<string>('APPLE_TEST_EMAIL');
   private readonly appleTestCode =
     this.configService.getOrThrow<string>('APPLE_TEST_CODE');
+  private readonly appleTestPhoneNumber = this.configService.getOrThrow<string>(
+    'APPLE_TEST_PHONE_NUMBER',
+  );
 
   constructor(
     private readonly configService: ConfigService,
@@ -63,12 +66,14 @@ export class VerifyService {
         ? this.appleTestCode
         : crypto.randomInt(1000000).toString().padStart(6, '0'); // 6 digit int string.
 
-    await this.mailService.sendEmail(
-      email,
-      `"인포팀 계정" <${this.sender}>`,
-      '인포팀 계정 인증 코드',
-      await this.templatesService.renderCode(emailVerificationCode),
-    );
+    if (email !== this.appleTestEmail) {
+      await this.mailService.sendEmail(
+        email,
+        `"인포팀 계정" <${this.sender}>`,
+        '인포팀 계정 인증 코드',
+        await this.templatesService.renderCode(emailVerificationCode),
+      );
+    }
 
     await this.redisService.set<string>(email, emailVerificationCode, {
       ttl: 3 * 60,
@@ -216,17 +221,22 @@ export class VerifyService {
       }
     }
 
-    const phoneNumberVerificationCode: string = crypto
-      .randomInt(1000000)
-      .toString()
-      .padStart(6, '0');
+    const phoneNumberVerificationCode: string =
+      phoneNumber === this.appleTestPhoneNumber
+        ? this.appleTestCode
+        : crypto.randomInt(1000000).toString().padStart(6, '0');
 
-    if (tel.country === 'KR') {
-      const msg = `인포팀 계정 인증코드: [${phoneNumberVerificationCode}] 공유하지 마십시오.`;
-      await this.smsService.sendDomesticMessage(tel.formatNational(), msg);
-    } else {
-      const msg = `Infoteam Account verification code: [${phoneNumberVerificationCode}]. Do not share this code with anyone.`;
-      await this.smsService.sendInternationalMessage(tel.format('E.164'), msg);
+    if (phoneNumber !== this.appleTestPhoneNumber) {
+      if (tel.country === 'KR') {
+        const msg = `인포팀 계정 인증코드: [${phoneNumberVerificationCode}] 공유하지 마십시오.`;
+        await this.smsService.sendDomesticMessage(tel.formatNational(), msg);
+      } else {
+        const msg = `Infoteam Account verification code: [${phoneNumberVerificationCode}]. Do not share this code with anyone.`;
+        await this.smsService.sendInternationalMessage(
+          tel.format('E.164'),
+          msg,
+        );
+      }
     }
 
     await this.redisService.set<string>(
