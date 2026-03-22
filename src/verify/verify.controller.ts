@@ -58,7 +58,7 @@ export class VerifyController {
   @ApiOperation({
     summary: 'send email certification code',
     description:
-      'send the email certification code to the email address. The code is valid for 5 minutes.',
+      'send the email certification code to the email address. The code is valid for 3 minutes.',
   })
   @ApiResponse({ status: 201, description: 'success' })
   @ApiInternalServerErrorResponse({ description: 'server error' })
@@ -87,7 +87,7 @@ export class VerifyController {
   @ApiOperation({
     summary: 'send phone number certification code',
     description:
-      'send the phone number certification code to the phone number. The code is valid for 5 minutes.',
+      'send the phone number certification code to the phone number. The code is valid for 3 minutes.',
   })
   @ApiCreatedResponse({ description: 'success' })
   @ApiInternalServerErrorResponse({ description: 'server error' })
