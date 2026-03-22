@@ -37,6 +37,10 @@ export class VerifyService {
   );
   private readonly phoneNumberVerificationCodePrefix =
     'PhoneNumberVerificationCode';
+  private readonly appleTestEmail =
+    this.configService.getOrThrow<string>('APPLE_TEST_EMAIL');
+  private readonly appleTestCode =
+    this.configService.getOrThrow<string>('APPLE_TEST_CODE');
 
   constructor(
     private readonly configService: ConfigService,
@@ -54,10 +58,10 @@ export class VerifyService {
    * @returns void, but it sends email to the email address
    */
   async sendEmailCode({ email }: SendEmailCodeDto): Promise<void> {
-    const emailVerificationCode: string = crypto
-      .randomInt(1000000)
-      .toString()
-      .padStart(6, '0'); // 6 digit int string.
+    const emailVerificationCode: string =
+      email === this.appleTestEmail
+        ? this.appleTestCode
+        : crypto.randomInt(1000000).toString().padStart(6, '0'); // 6 digit int string.
 
     await this.mailService.sendEmail(
       email,
