@@ -87,7 +87,7 @@ export class VerifyController {
   @ApiOperation({
     summary: 'send phone number certification code',
     description:
-      'send the phone number certification code to the phone number. The code is valid for 5 minutes. Only South Korean phone numbers are supported.',
+      'send the phone number certification code to the phone number. The code is valid for 5 minutes.',
   })
   @ApiCreatedResponse({ description: 'success' })
   @ApiInternalServerErrorResponse({ description: 'server error' })
