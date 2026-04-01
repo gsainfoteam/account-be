@@ -194,9 +194,10 @@ export class ClientController {
   @RequireClientRole(RoleType.ADMIN)
   @Delete(':clientId/members/:userId')
   async removeMember(
+    @GetUser() user: User,
     @Param() { clientId, userId }: ClientMemberParamsDto,
   ): Promise<void> {
-    return this.clientService.removeMember(clientId, userId);
+    return this.clientService.removeMember(user.uuid, clientId, userId);
   }
 
   @ApiOperation({

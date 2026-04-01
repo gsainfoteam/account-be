@@ -123,15 +123,26 @@ export class ClientService {
    * @param uuid client's uuid
    * @param userUuid id of the user who will be removed from the client
    */
-  async removeMember(uuid: string, userUuid: string): Promise<void> {
-    const curRole = await this.clientRepository.getUserClientRole(
-      uuid,
+  async removeMember(
+    userUuid: string,
+    clientUuid: string,
+    memberUuid: string,
+  ): Promise<void> {
+    const userRole = await this.clientRepository.getUserClientRole(
+      clientUuid,
       userUuid,
     );
-    if (curRole === RoleType.OWNER) {
-      throw new ForbiddenException('Owner role cannot be removed');
+    const memberRole = await this.clientRepository.getUserClientRole(
+      clientUuid,
+      memberUuid,
+    );
+    if (userUuid === memberUuid) {
+      throw new ForbiddenException('User cannot remove themselves');
     }
-    await this.clientRepository.removeMemberFromClient(uuid, userUuid);
+    if (userRole === RoleType.ADMIN && memberRole !== RoleType.MEMBER) {
+      throw new ForbiddenException('Admins can only remove members');
+    }
+    await this.clientRepository.removeMemberFromClient(clientUuid, memberUuid);
   }
 
   /**
