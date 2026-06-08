@@ -25,7 +25,7 @@ export class ConsentReqDto {
   })
   @Transform(({ value }) => {
     if (typeof value === 'string')
-      return value.split(' ').map((v) => {
+      return value.split(' ').filter((v) => v !== '').map((v) => {
         if (ClientScopeList.includes(v)) return v;
         throw new OauthAuthorizeException('invalid_scope');
       });
