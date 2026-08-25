@@ -24,6 +24,7 @@ export class ConsentReqDto {
     type: String,
   })
   @Transform(({ value }) => {
+    if (!value) return [];
     if (typeof value === 'string')
       return value.split(' ').map((v) => {
         if (ClientScopeList.includes(v)) return v;
@@ -110,6 +111,7 @@ export class AuthorizationReqDto {
     description: 'scope of the client',
   })
   @Transform(({ value }) => {
+    if (!value) return [];
     if (typeof value === 'string')
       return value.split(' ').map((v) => {
         if (ScopeList.includes(v)) return v;
@@ -214,6 +216,7 @@ export class TokenReqDto {
     description: 'scope of the client',
   })
   @Transform(({ value }) => {
+    if (!value) return [];
     if (typeof value === 'string')
       return value.split(' ').map((v) => {
         if (ScopeList.includes(v)) return v;
