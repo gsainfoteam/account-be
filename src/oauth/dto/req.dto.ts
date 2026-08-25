@@ -24,12 +24,13 @@ export class ConsentReqDto {
     type: String,
   })
   @Transform(({ value }) => {
-    if (!value) return [];
-    if (typeof value === 'string')
+    if (typeof value === 'string') {
+      if (!value) return [];
       return value.split(' ').map((v) => {
         if (ClientScopeList.includes(v)) return v;
         throw new OauthAuthorizeException('invalid_scope');
       });
+    }
     throw new OauthAuthorizeException('invalid_scope');
   })
   @IsString({ each: true })
