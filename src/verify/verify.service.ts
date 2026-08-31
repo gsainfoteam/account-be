@@ -3,6 +3,7 @@ import { MailService } from '@lib/mail';
 import { CacheNotFoundException, RedisService } from '@lib/redis';
 import { SmsService } from '@lib/sms';
 import { TemplatesService } from '@lib/templates';
+import { HttpService } from '@nestjs/axios';
 import {
   BadRequestException,
   Injectable,
@@ -12,8 +13,10 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { AxiosError } from 'axios';
 import * as crypto from 'crypto';
 import { ParseError, parsePhoneNumberWithError } from 'libphonenumber-js';
+import { catchError, firstValueFrom } from 'rxjs';
 
 import {
   SendEmailCodeDto,
@@ -52,6 +55,7 @@ export class VerifyService {
     private readonly mailService: MailService,
     private readonly smsService: SmsService,
     private readonly templatesService: TemplatesService,
+    private readonly httpService: HttpService,
   ) {}
 
   /**
@@ -177,32 +181,44 @@ export class VerifyService {
     formData.append('name', name);
     formData.append('birth_dt', birthDate);
     formData.append('mode', 'studtNoSearch');
-    const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), 60e3);
-    const res = await fetch(this.verifyStudentIdUrl, {
-      method: 'POST',
-      body: formData,
-      signal: ac.signal,
-    })
-      .catch((error) => {
-        if (error instanceof Error && error.name === 'AbortError') {
-          this.logger.debug('timeout error');
-          throw new InternalServerErrorException('timeout error');
-        }
-        this.logger.error(`get student id error: ${error}`);
-        throw new InternalServerErrorException();
-      })
-      .finally(() => clearTimeout(timer));
-    if (!res.ok) {
-      this.logger.debug(`GIST server error: ${res.status} ${res.statusText}`);
-      throw new InternalServerErrorException(
-        `GIST server error: ${res.status} ${res.statusText}`,
-      );
-    }
-    const data = (await res.json()) as { result: string; studtNo?: string };
-    if (data.result === 'false' || !data.studtNo)
+
+    const res = (
+      await firstValueFrom(
+        this.httpService
+          .post<{
+            result: string;
+            studtNo?: string;
+          }>(this.verifyStudentIdUrl, formData, {
+            timeout: 60e3,
+            insecureHTTPParser: true,
+          })
+          .pipe(
+            catchError((error: AxiosError) => {
+              if (
+                error.code === 'ECONNABORTED' ||
+                error.code === 'ETIMEDOUT' ||
+                error.code === 'ERR_CANCELED'
+              ) {
+                this.logger.debug('timeout error');
+                throw new InternalServerErrorException('timeout error');
+              }
+              if (error.response) {
+                const { status, statusText } = error.response;
+                this.logger.debug(`GIST server error: ${status} ${statusText}`);
+                throw new InternalServerErrorException(
+                  `GIST server error: ${status} ${statusText}`,
+                );
+              }
+              this.logger.error(`get student id error: ${error.message}`);
+              throw new InternalServerErrorException();
+            }),
+          ),
+      )
+    ).data;
+
+    if (res.result === 'false' || !res.studtNo)
       throw new NotFoundException('Student ID is not found');
-    return data.studtNo;
+    return res.studtNo;
   }
 
   async sendPhoneCode({ phoneNumber }: SendPhoneCodeDto): Promise<void> {
