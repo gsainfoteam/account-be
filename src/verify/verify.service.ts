@@ -16,7 +16,7 @@ import { JwtService } from '@nestjs/jwt';
 import { AxiosError } from 'axios';
 import * as crypto from 'crypto';
 import { ParseError, parsePhoneNumberWithError } from 'libphonenumber-js';
-import { catchError, firstValueFrom } from 'rxjs';
+import { catchError, finalize, firstValueFrom } from 'rxjs';
 
 import {
   SendEmailCodeDto,
@@ -182,6 +182,9 @@ export class VerifyService {
     formData.append('birth_dt', birthDate);
     formData.append('mode', 'studtNoSearch');
 
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 60e3);
+
     const res = (
       await firstValueFrom(
         this.httpService
@@ -190,6 +193,7 @@ export class VerifyService {
             studtNo?: string;
           }>(this.verifyStudentIdUrl, formData, {
             timeout: 60e3,
+            signal: ac.signal,
             insecureHTTPParser: true,
           })
           .pipe(
@@ -212,6 +216,7 @@ export class VerifyService {
               this.logger.error(`get student id error: ${error.message}`);
               throw new InternalServerErrorException();
             }),
+            finalize(() => clearTimeout(timer)),
           ),
       )
     ).data;
