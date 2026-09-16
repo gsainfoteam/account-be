@@ -68,7 +68,7 @@ jobs:
 
       - name: Update Kubernetes Manifestd
         run: |
-          sed -i "s|image:.*|image: $REGISTRY\/$REPOSITORY:$IMAGE_TAG|g" infoteam/service/account/prod.yaml
+          sed -i "s|tag:.*|tag: $IMAGE_TAG|g" infoteam/service/account/values.prod.yaml
 
       - name: Commit and Push
         run: |
