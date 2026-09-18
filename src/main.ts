@@ -1,7 +1,6 @@
 import fastifyCookie from '@fastify/cookie';
 import {
   initializeMetrics,
-  initializeOpenTelemetry,
   MetricsInterceptor,
 } from '@gsainfoteam/nest-observability';
 import { Logger, MethodNotAllowedException } from '@nestjs/common';
@@ -14,6 +13,7 @@ import {
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 import { AppModule } from './app.module';
+import { shutdownOpenTelemetry } from './instrumentation';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -110,6 +110,40 @@ async function bootstrap() {
   // metrics interceptor
   app.useGlobalInterceptors(new MetricsInterceptor());
 
+  let isShuttingDown = false;
+
+  const shutdown = (signal: NodeJS.Signals) => {
+    if (isShuttingDown) {
+      return;
+    }
+
+    isShuttingDown = true;
+    const logger = new Logger('Bootstrap');
+    let exitCode = 0;
+    logger.log(`Received ${signal}. Starting graceful shutdown.`);
+
+    void (async () => {
+      try {
+        await app.close();
+      } catch (error) {
+        exitCode = 1;
+        logger.error('Failed to close Nest application', error);
+      }
+
+      try {
+        await shutdownOpenTelemetry();
+      } catch (error) {
+        exitCode = 1;
+        logger.error('Failed to shutdown OpenTelemetry', error);
+      }
+
+      process.exit(exitCode);
+    })();
+  };
+
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
+
   // Execute the application
   await app.listen(process.env.PORT ?? 3000, '0.0.0.0');
 }
@@ -118,19 +152,6 @@ const bootstrapWithOTEL = async () => {
   const logger = new Logger('Bootstrap');
   try {
     const serviceName = process.env.OTEL_SERVICE_NAME ?? 'infoteam-account-be';
-    const apiUrl = process.env.API_URL;
-
-    if (apiUrl?.includes('account.gistory.me')) {
-      await initializeOpenTelemetry({
-        serviceName,
-        metricsPort: Number(process.env.METRICS_PORT ?? 9090),
-        otlpEndpoint:
-          process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT ??
-          'http://localhost:4318/v1/traces',
-        apiUrl,
-        ignorePatterns: ['/health', '/metrics'],
-      });
-    }
     initializeMetrics(serviceName);
     await bootstrap();
   } catch (error) {
