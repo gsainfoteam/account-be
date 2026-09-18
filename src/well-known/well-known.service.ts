@@ -1,9 +1,11 @@
+import { Trace } from '@gsainfoteam/nest-observability';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ClientScopeList } from 'src/client/types/clientScopes.type';
 import { ScopeList } from 'src/oauth/types/scope.type';
 
 @Injectable()
+@Trace()
 export class WellKnownService {
   private readonly baseUrl: string;
   constructor(private readonly configService: ConfigService) {

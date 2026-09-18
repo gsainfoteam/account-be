@@ -1,7 +1,7 @@
+import { OtelClassSerializerInterceptor } from '@gsainfoteam/nest-observability';
 import {
   BadRequestException,
   Body,
-  ClassSerializerInterceptor,
   Controller,
   Delete,
   Get,
@@ -45,7 +45,7 @@ import { GrantContentType } from './types/grant.type';
 @ApiTags('oauth')
 @Controller('oauth')
 @UsePipes(new ValidationPipe({ transform: true }))
-@UseInterceptors(ClassSerializerInterceptor)
+@UseInterceptors(OtelClassSerializerInterceptor)
 export class OauthController {
   constructor(private readonly oauthService: OauthService) {}
 

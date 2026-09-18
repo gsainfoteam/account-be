@@ -1,3 +1,4 @@
+import { Trace } from '@gsainfoteam/nest-observability';
 import { Loggable } from '@lib/logger';
 import { MailService } from '@lib/mail';
 import { CacheNotFoundException, RedisService } from '@lib/redis';
@@ -28,6 +29,7 @@ import { VerificationJwtResDto, VerifyStudentIdResDto } from './dto/res.dto';
 import { VerificationJwtPayloadType } from './types/verificationJwtPayload.type';
 
 @Loggable()
+@Trace()
 @Injectable()
 export class VerifyService {
   private readonly emailVerificationCodePrefix = 'EmailVerificationCode';

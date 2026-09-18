@@ -1,3 +1,4 @@
+import { Trace } from '@gsainfoteam/nest-observability';
 import { Loggable } from '@lib/logger/decorator/loggable';
 import { ObjectService } from '@lib/object';
 import { ForbiddenException, Injectable } from '@nestjs/common';
@@ -13,6 +14,7 @@ import { ClientMember } from './types/clientMember.type';
 
 @Injectable()
 @Loggable()
+@Trace()
 export class ClientService {
   constructor(
     private readonly clientRepository: ClientRepository,
