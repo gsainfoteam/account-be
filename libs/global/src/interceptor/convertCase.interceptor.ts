@@ -4,7 +4,7 @@ import {
   Injectable,
   NestInterceptor,
 } from '@nestjs/common';
-import { Observable, map } from 'rxjs';
+import { map, Observable } from 'rxjs';
 import { objectToCamel, objectToSnake } from 'ts-case-convert';
 
 @Injectable()
