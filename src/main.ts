@@ -1,5 +1,10 @@
 import fastifyCookie from '@fastify/cookie';
-import { MethodNotAllowedException } from '@nestjs/common';
+import {
+  initializeMetrics,
+  initializeOpenTelemetry,
+  MetricsInterceptor,
+} from '@gsainfoteam/nest-observability';
+import { Logger, MethodNotAllowedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import {
@@ -102,8 +107,35 @@ async function bootstrap() {
       displayRequestDuration: true,
     },
   });
+  // metrics interceptor
+  app.useGlobalInterceptors(new MetricsInterceptor());
+
   // Execute the application
   await app.listen(process.env.PORT ?? 3000, '0.0.0.0');
 }
-// eslint-disable-next-line @typescript-eslint/no-floating-promises
-bootstrap();
+
+const bootstrapWithOTEL = async () => {
+  const logger = new Logger('Bootstrap');
+  try {
+    const serviceName = process.env.OTEL_SERVICE_NAME ?? 'infoteam-account-be';
+    const apiUrl = process.env.API_URL;
+
+    if (apiUrl?.includes('account.gistory.me')) {
+      await initializeOpenTelemetry({
+        serviceName,
+        metricsPort: Number(process.env.METRICS_PORT ?? 9090),
+        otlpEndpoint:
+          process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT ??
+          'http://localhost:4318/v1/traces',
+        apiUrl,
+      });
+    }
+    initializeMetrics(serviceName);
+    await bootstrap();
+  } catch (error) {
+    logger.error('Failed to bootstrap application', error);
+    process.exit(1);
+  }
+};
+
+void bootstrapWithOTEL();
