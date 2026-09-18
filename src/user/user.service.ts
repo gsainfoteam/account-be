@@ -1,3 +1,4 @@
+import { Trace } from '@gsainfoteam/nest-observability';
 import { Loggable } from '@lib/logger';
 import { MailService } from '@lib/mail';
 import { ObjectService } from '@lib/object';
@@ -40,6 +41,7 @@ import { UserConsentType } from './types/userConsent.type';
 import { UserRepository } from './user.repository';
 
 @Loggable()
+@Trace()
 @Injectable()
 export class UserService {
   private readonly logger = new Logger(UserService.name);

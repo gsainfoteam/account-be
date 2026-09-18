@@ -1,3 +1,4 @@
+import { Trace } from '@gsainfoteam/nest-observability';
 import { Loggable } from '@lib/logger';
 import { RedisService } from '@lib/redis';
 import {
@@ -33,6 +34,7 @@ import { TokenScopeList } from './types/scope.type';
 import { TokenCacheType } from './types/tokenCache.type';
 
 @Loggable()
+@Trace()
 @Injectable()
 export class OauthService {
   private readonly CodePrefix = 'code';

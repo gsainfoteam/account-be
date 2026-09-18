@@ -1,7 +1,7 @@
+import { OtelClassSerializerInterceptor } from '@gsainfoteam/nest-observability';
 import { ExceptionLoggerFilter } from '@lib/logger';
 import {
   Body,
-  ClassSerializerInterceptor,
   Controller,
   Delete,
   Post,
@@ -30,7 +30,7 @@ import { LoginResDto, PasskeyAuthOptionResDto } from './dto/res.dto';
 @ApiTags('auth')
 @Controller('auth')
 @UsePipes(ValidationPipe)
-@UseInterceptors(ClassSerializerInterceptor)
+@UseInterceptors(OtelClassSerializerInterceptor)
 @UseFilters(new ExceptionLoggerFilter())
 export class AuthController {
   constructor(private readonly authService: AuthService) {}

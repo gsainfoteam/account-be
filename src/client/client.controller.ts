@@ -1,7 +1,7 @@
+import { OtelClassSerializerInterceptor } from '@gsainfoteam/nest-observability';
 import { ExceptionLoggerFilter } from '@lib/logger';
 import {
   Body,
-  ClassSerializerInterceptor,
   Controller,
   Delete,
   Get,
@@ -53,7 +53,7 @@ import { ClientRoleGuard, RequireClientRole } from './guard/role.guard';
 @ApiTags('client')
 @Controller('client')
 @UsePipes(new ValidationPipe({ transform: true }))
-@UseInterceptors(ClassSerializerInterceptor)
+@UseInterceptors(OtelClassSerializerInterceptor)
 @UseFilters(new ExceptionLoggerFilter())
 export class ClientController {
   constructor(private readonly clientService: ClientService) {}

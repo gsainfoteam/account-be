@@ -1,3 +1,4 @@
+import { Trace } from '@gsainfoteam/nest-observability';
 import { Loggable } from '@lib/logger/decorator/loggable';
 import { ObjectService } from '@lib/object';
 import { RedisService } from '@lib/redis';
@@ -21,6 +22,7 @@ import { LoginResultType } from './types/loginResult.type';
 
 @Injectable()
 @Loggable()
+@Trace()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
   private readonly accessTokenExpireTime: number;
