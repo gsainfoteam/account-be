@@ -26,6 +26,7 @@ export class PrismaService
     readonly prismaMetricsService: PrismaMetricsService,
   ) {
     super(createPrismaOption(configService.getOrThrow<string>('DATABASE_URL')));
+    this.$on('query', this.prismaMetricsService.getMetricsMiddleware());
   }
 
   /**
