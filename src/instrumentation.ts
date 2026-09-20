@@ -1,9 +1,4 @@
-import {
-  initializeOpenTelemetry,
-  shutdownOpenTelemetry,
-} from '@gsainfoteam/nest-observability';
-
-export { shutdownOpenTelemetry };
+import { initializeOpenTelemetry } from '@gsainfoteam/nest-observability';
 
 const serviceName = process.env.OTEL_SERVICE_NAME ?? 'infoteam-account-be';
 const apiUrl = process.env.API_URL;
