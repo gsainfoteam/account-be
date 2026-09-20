@@ -1,26 +1,31 @@
+import { PrismaMetricsService } from '@gsainfoteam/nest-observability';
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaClient } from '@prisma/client';
+import { PrismaClientOptions } from '@prisma/client/runtime/library';
+
+const createPrismaOption = (url: string) =>
+  ({
+    log: [{ emit: 'event', level: 'query' }] as const,
+    datasources: { db: { url } },
+  }) satisfies PrismaClientOptions;
 
 /**
  * Service for using Prisma.
  */
 @Injectable()
 export class PrismaService
-  extends PrismaClient
+  extends PrismaClient<ReturnType<typeof createPrismaOption>>
   implements OnModuleInit, OnModuleDestroy
 {
   /**
    * To set the location of the database, prisma: datasources is used.
    */
-  constructor(readonly configService: ConfigService) {
-    super({
-      datasources: {
-        db: {
-          url: configService.get<string>('DATABASE_URL'),
-        },
-      },
-    });
+  constructor(
+    readonly configService: ConfigService,
+    readonly prismaMetricsService: PrismaMetricsService,
+  ) {
+    super(createPrismaOption(configService.getOrThrow<string>('DATABASE_URL')));
   }
 
   /**

@@ -47,6 +47,11 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: create .npmrc
+        run: 'echo -e "//npm.pkg.github.com/:_authToken=$GITHUB_TOKEN\n@gsainfoteam:registry=https://npm.pkg.github.com/" > .secret_npmrc'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build and push Docker image
         id: push
         uses: docker/build-push-action@v6
@@ -57,6 +62,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          secret-files: |
+            "npmrc=./.secret_npmrc"
 
   deploy:
     name: Update Git Repository

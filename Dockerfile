@@ -1,5 +1,5 @@
 # create a bun base image
-FROM oven/bun:1 AS base
+FROM oven/bun:1.4 AS base
 RUN apt-get update -y && apt-get install -y openssl
 WORKDIR /usr/src/app
 
@@ -10,11 +10,11 @@ COPY ./package.json ./bun.lock ./
 
 FROM installer AS prod
 COPY ./prisma/schema.prisma ./prisma/schema.prisma
-RUN bun install --production && bun prisma generate --generator=client
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc bun install --production && bun prisma generate --generator=client
 
 FROM installer AS builder
 COPY . .
-RUN bun install && bun run build
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc bun install && bun run build
 
 
 # copy production dependencies and source code into final image
