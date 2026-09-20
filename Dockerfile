@@ -10,7 +10,7 @@ COPY ./package.json ./bun.lock ./
 
 FROM installer AS prod
 COPY ./prisma/schema.prisma ./prisma/schema.prisma
-RUN bun install --production && bun prisma generate --generator=client
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc bun install --production && bun prisma generate --generator=client
 
 FROM installer AS builder
 COPY . .
