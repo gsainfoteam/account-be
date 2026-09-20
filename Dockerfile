@@ -14,7 +14,7 @@ RUN --mount=type=secret,id=npmrc,target=/root/.npmrc bun install --production &&
 
 FROM installer AS builder
 COPY . .
-RUN bun install && bun run build
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc bun install && bun run build
 
 
 # copy production dependencies and source code into final image
