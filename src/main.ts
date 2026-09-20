@@ -2,8 +2,8 @@ import fastifyCookie from '@fastify/cookie';
 import {
   initializeMetrics,
   MetricsInterceptor,
+  shutdownOpenTelemetry,
 } from '@gsainfoteam/nest-observability';
-import { shutdownOpenTelemetry } from '@gsainfoteam/nest-observability';
 import { Logger, MethodNotAllowedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
