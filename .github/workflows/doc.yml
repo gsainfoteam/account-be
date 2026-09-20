@@ -13,6 +13,7 @@ on:
 permissions:
   contents: read
   pages: write
+  packages: read
   id-token: write
 
 concurrency:
@@ -35,11 +36,16 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+          registries: |
+            https://registry.npmjs.org/
+            @gsainfoteam:https://npm.pkg.github.com/|$GITHUB_TOKEN
 
       - name: build static content
         run: |
           bun install
           bun run doc
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

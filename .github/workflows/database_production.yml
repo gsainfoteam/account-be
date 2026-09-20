@@ -9,6 +9,9 @@ jobs:
   deploy:
     name: Migrate Database
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
 
     steps:
       - name: Checkout Repository
@@ -16,9 +19,15 @@ jobs:
 
       - name: Install bun
         uses: oven-sh/setup-bun@v2
+        with:
+          registries: |
+            https://registry.npmjs.org/
+            @gsainfoteam:https://npm.pkg.github.com/|$GITHUB_TOKEN
 
       - name: Install Prisma
         run: bun install
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: setup cloudflared
         uses: AnimMouse/setup-cloudflared@v2
