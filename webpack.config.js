@@ -11,7 +11,7 @@ module.exports = function (options, webpackInstance) {
     ...options,
     entry: {
       main: path.resolve(__dirname, 'src/main.ts'),
-      instrumentation: path.resolve(__dirname, 'src/instrumentation.mts'),
+      instrumentation: path.resolve(__dirname, 'src/instrumentation.ts'),
     },
     output: {
       filename: '[name].js',

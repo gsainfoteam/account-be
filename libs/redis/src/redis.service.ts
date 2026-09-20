@@ -1,3 +1,4 @@
+import { Trace } from '@gsainfoteam/nest-observability';
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
@@ -6,6 +7,7 @@ import { CacheNotFoundException } from './exceptions/cacheNotFound.exception';
 import { CacheConfig } from './types/cacheConfig.type';
 
 @Injectable()
+@Trace()
 export class RedisService implements OnModuleDestroy {
   private readonly redisClient: Redis;
   private readonly logger = new Logger(RedisService.name);

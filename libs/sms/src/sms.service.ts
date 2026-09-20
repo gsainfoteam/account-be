@@ -1,4 +1,5 @@
 import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
+import { Trace } from '@gsainfoteam/nest-observability';
 import { HttpService } from '@nestjs/axios';
 import {
   Injectable,
@@ -9,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { AxiosError } from 'axios';
 import { catchError, firstValueFrom } from 'rxjs';
 
+@Trace()
 @Injectable()
 export class SmsService {
   private readonly logger = new Logger(SmsService.name);

@@ -1,3 +1,4 @@
+import { Trace } from '@gsainfoteam/nest-observability';
 import { Loggable } from '@lib/logger/decorator/loggable';
 import { PrismaService } from '@lib/prisma';
 import {
@@ -14,6 +15,7 @@ import { ClientMember } from './types/clientMember.type';
 
 @Injectable()
 @Loggable()
+@Trace()
 export class ClientRepository {
   private readonly logger = new Logger(ClientRepository.name);
   constructor(private readonly prismaService: PrismaService) {}

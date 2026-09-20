@@ -1,3 +1,4 @@
+import { Trace } from '@gsainfoteam/nest-observability';
 import { PrismaService } from '@lib/prisma';
 import {
   Injectable,
@@ -9,6 +10,7 @@ import { Authenticator, User } from '@prisma/client';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { UserWithAuthenticators } from 'src/user/types/userWithAuthenticators';
 
+@Trace()
 @Injectable()
 export class AuthRepository {
   private readonly logger = new Logger(AuthRepository.name);

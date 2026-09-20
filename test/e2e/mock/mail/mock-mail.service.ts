@@ -1,3 +1,4 @@
+import { Trace } from '@gsainfoteam/nest-observability';
 import { Injectable, Logger } from '@nestjs/common';
 
 interface SentEmail {
@@ -8,6 +9,7 @@ interface SentEmail {
 }
 
 @Injectable()
+@Trace()
 export class MockMailService {
   private readonly logger = new Logger(MockMailService.name);
   // 전송된 이메일을 저장하는 배열

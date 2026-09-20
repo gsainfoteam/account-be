@@ -1,8 +1,10 @@
+import { Trace } from '@gsainfoteam/nest-observability';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createTransport, Transporter } from 'nodemailer';
 
 @Injectable()
+@Trace()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
   private readonly transporter: Transporter;

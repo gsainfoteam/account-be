@@ -1,3 +1,4 @@
+import { Trace } from '@gsainfoteam/nest-observability';
 import { Loggable } from '@lib/logger';
 import { PrismaService } from '@lib/prisma';
 import {
@@ -14,6 +15,7 @@ import { BasicPasskeyDto } from './dto/res.dto';
 import { UserConsentType } from './types/userConsent.type';
 import { UserWithAuthenticators } from './types/userWithAuthenticators';
 
+@Trace()
 @Loggable()
 @Injectable()
 export class UserRepository {
