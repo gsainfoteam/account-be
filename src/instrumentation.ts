@@ -3,7 +3,7 @@ import { initializeOpenTelemetry } from '@gsainfoteam/nest-observability';
 const serviceName = process.env.OTEL_SERVICE_NAME ?? 'infoteam-account-be';
 const apiUrl = process.env.API_URL;
 
-await (async () => {
+void (async () => {
   try {
     if (apiUrl?.includes('account.gistory.me')) {
       await initializeOpenTelemetry({
