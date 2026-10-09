@@ -220,6 +220,43 @@ describe('OauthService', () => {
     });
   });
 
+  describe('client credentials', () => {
+    const grant = (clientSecret?: string) => ({
+      grantType: 'client_credentials' as const,
+      clientId: 'client-1',
+      clientSecret: clientSecret as string,
+      scope: ['name' as const],
+    });
+
+    it('refuses a public client with unauthorized_client', async () => {
+      const { service } = setup();
+
+      await expect(
+        errorOf(service.clientCredentialsGrant(grant(SECRET))),
+      ).resolves.toEqual({ error: 'unauthorized_client' });
+    });
+
+    it('answers a missing secret with invalid_client instead of crashing', async () => {
+      const { service } = setup(
+        client({ tokenEndpointAuthMethod: 'client_secret_post' }),
+      );
+
+      await expect(
+        errorOf(service.clientCredentialsGrant(grant())),
+      ).resolves.toEqual({ error: 'invalid_client' });
+    });
+
+    it('issues a token to a confidential client with its secret', async () => {
+      const { service } = setup(
+        client({ tokenEndpointAuthMethod: 'client_secret_post' }),
+      );
+
+      await expect(
+        service.clientCredentialsGrant(grant(SECRET)),
+      ).resolves.toMatchObject({ tokenType: 'Bearer' });
+    });
+  });
+
   describe('refresh tokens', () => {
     it('stores the nonce of the authorization with the refresh token', async () => {
       const { service, oauthRepository } = setup();

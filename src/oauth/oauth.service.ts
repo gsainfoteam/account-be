@@ -4,7 +4,7 @@ import { CacheNotFoundException, RedisService } from '@lib/redis';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { User } from '@prisma/client';
+import { Client, User } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { ClientService } from 'src/client/client.service';
@@ -402,11 +402,11 @@ export class OauthService {
     clientSecret,
     scope,
   }: ClientCredentialsGrantContentType): Promise<TokenResDto> {
-    const client = await this.clientService.getClientByUuid(clientId);
-
-    if (!bcrypt.compareSync(clientSecret, client.secret)) {
-      throw new OauthTokenException('invalid_client');
+    const client = await this.findClient(clientId);
+    if (client.tokenEndpointAuthMethod === 'none') {
+      throw new OauthTokenException('unauthorized_client');
     }
+    this.verifySecret(client, clientSecret);
 
     scope.forEach((s) => {
       if (!client.scopes.includes(s) && !client.optionalScopes.includes(s)) {
@@ -560,21 +560,26 @@ export class OauthService {
     clientId: string | undefined,
     clientSecret: string | undefined,
   ): Promise<string> {
+    const client = await this.findClient(clientId);
+    if (client.tokenEndpointAuthMethod !== 'none') {
+      this.verifySecret(client, clientSecret);
+    }
+    return client.uuid;
+  }
+
+  private async findClient(clientId: string | undefined): Promise<Client> {
     if (!clientId) {
       throw new OauthTokenException('invalid_client');
     }
-    const client = await this.clientService
-      .getClientByUuid(clientId)
-      .catch(() => {
-        throw new OauthTokenException('invalid_client');
-      });
-    if (client.tokenEndpointAuthMethod === 'none') {
-      return client.uuid;
-    }
+    return this.clientService.getClientByUuid(clientId).catch(() => {
+      throw new OauthTokenException('invalid_client');
+    });
+  }
+
+  private verifySecret(client: Client, clientSecret: string | undefined): void {
     if (!clientSecret || !bcrypt.compareSync(clientSecret, client.secret)) {
       throw new OauthTokenException('invalid_client');
     }
-    return client.uuid;
   }
 
   /**
