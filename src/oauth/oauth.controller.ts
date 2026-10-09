@@ -2,7 +2,6 @@ import { OtelClassSerializerInterceptor } from '@gsainfoteam/nest-observability'
 import {
   Body,
   Controller,
-  Delete,
   Get,
   Headers,
   HttpCode,
@@ -116,16 +115,6 @@ export class OauthController {
   }
 
   @ApiOperation({
-    summary: 'revoke the token',
-    description:
-      'revoke the token from the client. through this endpoint, the client can revoke the token.',
-  })
-  @Delete('token')
-  async revoke(@Body() body: RevokeReqDto): Promise<void> {
-    return this.oauthService.revoke(body);
-  }
-
-  @ApiOperation({
     summary: 'revoke a token (RFC 7009)',
     description:
       'revoke an access or refresh token issued to the client. responds with 200 even for unknown tokens.',
@@ -134,8 +123,8 @@ export class OauthController {
   @UseGuards(BasicAuthGuard)
   @Post('revoke')
   @HttpCode(HttpStatus.OK)
-  async revokeIssuedToken(@Body() body: RevokeReqDto): Promise<void> {
-    return this.oauthService.revokeIssuedToken(body);
+  async revoke(@Body() body: RevokeReqDto): Promise<void> {
+    return this.oauthService.revoke(body);
   }
 
   @ApiOperation({

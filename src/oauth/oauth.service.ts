@@ -2,7 +2,6 @@ import { Trace } from '@gsainfoteam/nest-observability';
 import { Loggable } from '@lib/logger';
 import { CacheNotFoundException, RedisService } from '@lib/redis';
 import {
-  BadRequestException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -438,29 +437,11 @@ export class OauthService {
   }
 
   /**
-   * revoke the token by the token type hint
-   * @param param0 tokens and token type hint
-   */
-  async revoke({ token, tokenTypeHint }: RevokeReqDto): Promise<void> {
-    if (tokenTypeHint === 'access_token') {
-      await this.redisService.del(token, {
-        prefix: this.TokenPrefix,
-      });
-    } else if (tokenTypeHint === 'refresh_token') {
-      await this.oauthRepository.deleteRefreshTokenByToken(token);
-    } else {
-      throw new BadRequestException({
-        error: 'invalid_request',
-      });
-    }
-  }
-
-  /**
    * revoke a token issued to the client, as RFC 7009 describes. unknown tokens and tokens of other
    * clients are ignored, so the response does not reveal whether a token exists.
    * @param param0 token, token type hint and client credentials
    */
-  async revokeIssuedToken({
+  async revoke({
     token,
     tokenTypeHint,
     clientId,
