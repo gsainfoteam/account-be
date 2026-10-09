@@ -26,12 +26,18 @@ export class WellKnownService {
       token_endpoint: `${this.baseUrl}/oauth/token`,
       userinfo_endpoint: `${this.baseUrl}/oauth/userinfo`,
       jwks_uri: `${this.baseUrl}/oauth/certs`,
+      revocation_endpoint: `${this.baseUrl}/oauth/revoke`,
       response_types_supported: ['code'],
       subject_types_supported: ['public'],
       id_token_signing_alg_values_supported: ['ES256'],
       scopes_supported: ScopeList,
       code_challenge_methods_supported: CodeChallengeMethodList,
       token_endpoint_auth_methods_supported: [
+        'none',
+        'client_secret_basic',
+        'client_secret_post',
+      ],
+      revocation_endpoint_auth_methods_supported: [
         'none',
         'client_secret_basic',
         'client_secret_post',

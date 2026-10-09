@@ -239,6 +239,30 @@ export class RevokeReqDto {
   token: string;
 
   @ApiPropertyOptional({
+    description: 'client_id of the client, when not sent with basic auth',
+    name: 'client_id',
+    required: false,
+  })
+  @Expose({
+    name: 'client_id',
+  })
+  @IsString()
+  @IsOptional()
+  clientId?: string;
+
+  @ApiPropertyOptional({
+    description: 'client_secret of a confidential client, when not sent with basic auth',
+    name: 'client_secret',
+    required: false,
+  })
+  @Expose({
+    name: 'client_secret',
+  })
+  @IsString()
+  @IsOptional()
+  clientSecret?: string;
+
+  @ApiPropertyOptional({
     description: 'token type hint',
     name: 'token_type_hint',
   })

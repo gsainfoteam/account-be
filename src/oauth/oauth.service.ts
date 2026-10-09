@@ -452,6 +452,52 @@ export class OauthService {
   }
 
   /**
+   * revoke a token issued to the client, as RFC 7009 describes. unknown tokens and tokens of other
+   * clients are ignored, so the response does not reveal whether a token exists.
+   * @param param0 token, token type hint and client credentials
+   */
+  async revokeIssuedToken({
+    token,
+    tokenTypeHint,
+    clientId,
+    clientSecret,
+  }: RevokeReqDto): Promise<void> {
+    const client = await this.authenticateClient(clientId, clientSecret);
+    const order =
+      tokenTypeHint === 'refresh_token'
+        ? (['refresh_token', 'access_token'] as const)
+        : (['access_token', 'refresh_token'] as const);
+
+    for (const type of order) {
+      if (await this.revokeIfIssuedTo(token, type, client)) return;
+    }
+  }
+
+  private async revokeIfIssuedTo(
+    token: string,
+    type: 'access_token' | 'refresh_token',
+    clientId: string,
+  ): Promise<boolean> {
+    if (type === 'access_token') {
+      const cached = await this.redisService.get<TokenCacheType>(token, {
+        prefix: this.TokenPrefix,
+      });
+      if (cached?.clientId !== clientId) return false;
+
+      await this.redisService.del(token, { prefix: this.TokenPrefix });
+      return true;
+    }
+
+    const stored = await this.oauthRepository
+      .findRefreshTokenByToken(token)
+      .catch(() => null);
+    if (stored?.clientUuid !== clientId) return false;
+
+    await this.oauthRepository.deleteRefreshTokenByToken(token);
+    return true;
+  }
+
+  /**
    * return the user info by the access token
    * @param token the access token
    * @param userUuid the user uuid if use client credential, it is required
@@ -524,7 +570,7 @@ export class OauthService {
   private async authenticateClient(
     clientId: string | undefined,
     clientSecret: string | undefined,
-  ): Promise<void> {
+  ): Promise<string> {
     if (!clientId) {
       throw new OauthTokenException('invalid_client');
     }
@@ -534,11 +580,12 @@ export class OauthService {
         throw new OauthTokenException('invalid_client');
       });
     if (client.tokenEndpointAuthMethod === 'none') {
-      return;
+      return client.uuid;
     }
     if (!clientSecret || !bcrypt.compareSync(clientSecret, client.secret)) {
       throw new OauthTokenException('invalid_client');
     }
+    return client.uuid;
   }
 
   /**

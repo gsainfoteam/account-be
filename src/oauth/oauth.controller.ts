@@ -126,6 +126,19 @@ export class OauthController {
   }
 
   @ApiOperation({
+    summary: 'revoke a token (RFC 7009)',
+    description:
+      'revoke an access or refresh token issued to the client. responds with 200 even for unknown tokens.',
+  })
+  @ApiConsumes('application/x-www-form-urlencoded', 'application/json')
+  @UseGuards(BasicAuthGuard)
+  @Post('revoke')
+  @HttpCode(HttpStatus.OK)
+  async revokeIssuedToken(@Body() body: RevokeReqDto): Promise<void> {
+    return this.oauthService.revokeIssuedToken(body);
+  }
+
+  @ApiOperation({
     summary: 'get the userinfo',
     description:
       'get the user information from the token. through this endpoint, the client can get the user information from the token.',
