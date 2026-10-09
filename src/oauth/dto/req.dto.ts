@@ -85,8 +85,7 @@ export class AuthorizationReqDto {
   codeChallenge: string;
 
   @ApiProperty({
-    description:
-      'code_challenge_method, only support "plain" or "S256" for PKCE',
+    description: 'code_challenge_method for PKCE. only "S256" is supported',
     type: 'string',
     name: 'code_challenge_method',
     enum: CodeChallengeMethodList,

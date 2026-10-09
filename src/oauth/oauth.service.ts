@@ -228,18 +228,12 @@ export class OauthService {
     if (cache.clientId !== clientId) {
       throw new OauthTokenException('invalid_grant');
     }
-    if (cache.codeChallengeMethod === 'S256') {
-      const hash = crypto
-        .createHash('sha256')
-        .update(codeVerifier)
-        .digest('base64url');
-      if (hash !== cache.codeChallenge) {
-        throw new OauthTokenException('invalid_grant');
-      }
-    } else if (cache.codeChallengeMethod === 'plain') {
-      if (codeVerifier !== cache.codeChallenge) {
-        throw new OauthTokenException('invalid_grant');
-      }
+    const challenge = crypto
+      .createHash('sha256')
+      .update(codeVerifier)
+      .digest('base64url');
+    if (challenge !== cache.codeChallenge) {
+      throw new OauthTokenException('invalid_grant');
     }
 
     const accessToken = this.generateOpaqueToken();

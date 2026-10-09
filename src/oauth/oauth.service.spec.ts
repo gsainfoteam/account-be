@@ -158,6 +158,24 @@ describe('OauthService', () => {
     });
   });
 
+  describe('PKCE', () => {
+    it('rejects a verifier that does not hash to the challenge', async () => {
+      const { service } = setup();
+      const { code } = await authorize(service);
+
+      await expect(
+        errorOf(
+          service.codeGrant({
+            grantType: 'authorization_code',
+            clientId: 'client-1',
+            code,
+            codeVerifier: 'w'.repeat(43),
+          }),
+        ),
+      ).resolves.toEqual({ error: 'invalid_grant' });
+    });
+  });
+
   describe('token endpoint client authentication', () => {
     it('lets a public client exchange a code with PKCE alone', async () => {
       const { service } = setup();
