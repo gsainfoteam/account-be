@@ -22,7 +22,10 @@ export class WellKnownService {
   discovery(): object {
     return {
       issuer: this.issuer,
-      authorization_endpoint: new URL('/authorize', this.loginOrigin).toString(),
+      authorization_endpoint: new URL(
+        '/authorize',
+        this.loginOrigin,
+      ).toString(),
       token_endpoint: `${this.baseUrl}/oauth/token`,
       userinfo_endpoint: `${this.baseUrl}/oauth/userinfo`,
       jwks_uri: `${this.baseUrl}/oauth/certs`,

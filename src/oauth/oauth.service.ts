@@ -1,10 +1,7 @@
 import { Trace } from '@gsainfoteam/nest-observability';
 import { Loggable } from '@lib/logger';
 import { CacheNotFoundException, RedisService } from '@lib/redis';
-import {
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { User } from '@prisma/client';
@@ -164,7 +161,10 @@ export class OauthService {
 
     const url = new URL(redirectUri);
     url.searchParams.set('code', code);
-    url.searchParams.set('iss', this.configService.getOrThrow<string>('JWT_ISSUER'));
+    url.searchParams.set(
+      'iss',
+      this.configService.getOrThrow<string>('JWT_ISSUER'),
+    );
     if (state) url.searchParams.set('state', state);
 
     return url.toString();

@@ -251,7 +251,8 @@ export class RevokeReqDto {
   clientId?: string;
 
   @ApiPropertyOptional({
-    description: 'client_secret of a confidential client, when not sent with basic auth',
+    description:
+      'client_secret of a confidential client, when not sent with basic auth',
     name: 'client_secret',
     required: false,
   })
