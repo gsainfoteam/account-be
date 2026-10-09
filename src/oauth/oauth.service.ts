@@ -349,9 +349,6 @@ export class OauthService {
 
     let idToken = undefined;
     if (refreshTokenData.scopes.includes('openid')) {
-      if (!refreshTokenData.nonce) {
-        throw new OauthTokenException('invalid_request');
-      }
       const user = await this.userService.findUserByUuid({
         uuid: refreshTokenData.userUuid,
       });
@@ -360,7 +357,7 @@ export class OauthService {
         sub: refreshTokenData.userUuid,
         aud: refreshTokenData.clientUuid,
         scope: refreshTokenData.scopes.join(' '),
-        nonce: refreshTokenData.nonce,
+        nonce: refreshTokenData.nonce ?? undefined,
         profile: refreshTokenData.scopes.includes('profile')
           ? user.profile
           : undefined,

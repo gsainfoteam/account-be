@@ -84,7 +84,7 @@ function setup(registered: Client = client()) {
     userService as never,
     jwtService as never,
   );
-  return { service, redis, oauthRepository };
+  return { service, redis, oauthRepository, jwtService };
 }
 
 const user = { uuid: 'user-1' } as User;
@@ -278,6 +278,33 @@ describe('OauthService', () => {
         'user-1',
         'client-1',
         'n-1',
+      );
+    });
+  });
+
+  describe('refreshing an openid session', () => {
+    it('issues an id_token without a nonce for a refresh token stored before nonces were kept', async () => {
+      const { service, oauthRepository, jwtService } = setup();
+      oauthRepository.findRefreshTokenByToken.mockImplementation(() =>
+        Promise.resolve({
+          token: 'rt-1',
+          scopes: ['openid', 'offline_access', 'name'],
+          userUuid: 'user-1',
+          clientUuid: 'client-1',
+          nonce: null,
+          expiresAt: new Date(Date.now() + 60_000),
+        } as never),
+      );
+
+      await expect(
+        service.refreshTokenGrant({
+          grantType: 'refresh_token',
+          clientId: 'client-1',
+          refreshToken: 'rt-1',
+        }),
+      ).resolves.toMatchObject({ idToken: 'id-token' });
+      expect(jwtService.sign).toHaveBeenCalledWith(
+        expect.objectContaining({ sub: 'user-1', nonce: undefined }),
       );
     });
   });
