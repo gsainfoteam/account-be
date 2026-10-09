@@ -60,10 +60,10 @@ model Client {
   updatedAt         DateTime  @updatedAt
   deleteRequestedAt DateTime? @map("delete_requested_at")
 
-  idTokenAllowed Boolean  @default(false)
+  idTokenAllowed          Boolean                 @default(false)
   tokenEndpointAuthMethod TokenEndpointAuthMethod @default(none) @map("token_endpoint_auth_method")
-  scopes         String[]
-  optionalScopes String[] @map("optional_scopes")
+  scopes                  String[]
+  optionalScopes          String[]                @map("optional_scopes")
 
   userLinks    UserClientRelation[] //role-aware
   consent      Consent[]
