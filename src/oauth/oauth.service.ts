@@ -26,7 +26,7 @@ import {
   GrantContentType,
   RefreshTokenGrantContentType,
 } from './types/grant.type';
-import { TokenScopeList } from './types/scope.type';
+import { isScope, isTokenScope } from './types/scope.type';
 import { TokenCacheType } from './types/tokenCache.type';
 
 @Loggable()
@@ -87,7 +87,7 @@ export class OauthService {
       }
     });
     client.scopes.forEach((s) => {
-      if (!scope.includes(s)) {
+      if (!isScope(s) || !scope.includes(s)) {
         throw new OauthAuthorizeException('invalid_scope');
       }
     });
@@ -123,7 +123,7 @@ export class OauthService {
 
     // check if the client has the scope
     scope.forEach((s) => {
-      if (!consent.scopes.includes(s) && !TokenScopeList.includes(s)) {
+      if (!consent.scopes.includes(s) && !isTokenScope(s)) {
         throw new OauthAuthorizeException('invalid_scope');
       }
     });
@@ -319,6 +319,7 @@ export class OauthService {
     if (refreshTokenData.clientUuid !== clientId) {
       throw new OauthTokenException('invalid_grant');
     }
+    const scopes = refreshTokenData.scopes.filter(isScope);
 
     const accessToken = this.generateOpaqueToken();
     await this.redisService.set<TokenCacheType>(
@@ -327,7 +328,7 @@ export class OauthService {
         to: 'user',
         sub: refreshTokenData.userUuid,
         clientId,
-        scope: refreshTokenData.scopes,
+        scope: scopes,
       },
       {
         prefix: this.TokenPrefix,
@@ -336,11 +337,11 @@ export class OauthService {
     );
 
     let newRefreshToken = undefined;
-    if (refreshTokenData.scopes.includes('offline_access')) {
+    if (scopes.includes('offline_access')) {
       newRefreshToken = this.generateOpaqueToken();
       await this.oauthRepository.createRefreshToken(
         newRefreshToken,
-        refreshTokenData.scopes,
+        scopes,
         refreshTokenData.userUuid,
         refreshTokenData.clientUuid,
         refreshTokenData.nonce ?? undefined,
@@ -348,7 +349,7 @@ export class OauthService {
     }
 
     let idToken = undefined;
-    if (refreshTokenData.scopes.includes('openid')) {
+    if (scopes.includes('openid')) {
       const user = await this.userService.findUserByUuid({
         uuid: refreshTokenData.userUuid,
       });
@@ -356,22 +357,14 @@ export class OauthService {
       idToken = this.jwtService.sign({
         sub: refreshTokenData.userUuid,
         aud: refreshTokenData.clientUuid,
-        scope: refreshTokenData.scopes.join(' '),
+        scope: scopes.join(' '),
         nonce: refreshTokenData.nonce ?? undefined,
-        profile: refreshTokenData.scopes.includes('profile')
-          ? user.profile
-          : undefined,
-        picture: refreshTokenData.scopes.includes('picture')
-          ? user.picture
-          : undefined,
-        name: refreshTokenData.scopes.includes('name') ? user.name : undefined,
-        email: refreshTokenData.scopes.includes('email')
-          ? user.email
-          : undefined,
-        student_id: refreshTokenData.scopes.includes('student_id')
-          ? user.studentId
-          : undefined,
-        phone_number: refreshTokenData.scopes.includes('phone_number')
+        profile: scopes.includes('profile') ? user.profile : undefined,
+        picture: scopes.includes('picture') ? user.picture : undefined,
+        name: scopes.includes('name') ? user.name : undefined,
+        email: scopes.includes('email') ? user.email : undefined,
+        student_id: scopes.includes('student_id') ? user.studentId : undefined,
+        phone_number: scopes.includes('phone_number')
           ? user.phoneNumber
           : undefined,
       });
@@ -385,7 +378,7 @@ export class OauthService {
       refreshToken: newRefreshToken,
       refreshTokenExpiresIn: 3 * 30 * 24 * 60 * 60, // 3 months
       idToken,
-      scope: refreshTokenData.scopes,
+      scope: scopes,
     };
   }
 
@@ -510,7 +503,7 @@ export class OauthService {
         throw new UnauthorizedException();
       }
       consent.scopes.forEach((v) => {
-        if (!tokenData.scope.includes(v)) {
+        if (!isScope(v) || !tokenData.scope.includes(v)) {
           throw new UnauthorizedException();
         }
       });

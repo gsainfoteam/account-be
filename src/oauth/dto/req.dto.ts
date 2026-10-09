@@ -7,7 +7,7 @@ import {
   IsString,
   MaxLength,
 } from 'class-validator';
-import { ClientScopeList } from 'src/client/types/clientScopes.type';
+import { isClientScope } from 'src/client/types/clientScopes.type';
 
 import { OauthAuthorizeException } from '../exceptions/oauth.authorize.exception';
 import { OauthTokenException } from '../exceptions/oauth.token.exception';
@@ -16,7 +16,7 @@ import {
   CodeChallengeMethodList,
 } from '../types/codeChallengeMethod.type';
 import { GrantType, GrantTypeList } from '../types/grant.type';
-import { ScopeList, ScopeType } from '../types/scope.type';
+import { isScope, ScopeType } from '../types/scope.type';
 
 export class ConsentReqDto {
   @ApiProperty({
@@ -27,7 +27,7 @@ export class ConsentReqDto {
     if (typeof value === 'string') {
       if (!value) return [];
       return value.split(' ').map((v) => {
-        if (ClientScopeList.includes(v)) return v;
+        if (isClientScope(v)) return v;
         throw new OauthAuthorizeException('invalid_scope');
       });
     }
@@ -115,7 +115,7 @@ export class AuthorizationReqDto {
     if (!value) return [];
     if (typeof value === 'string')
       return value.split(' ').map((v) => {
-        if (ScopeList.includes(v)) return v;
+        if (isScope(v)) return v;
         throw new OauthAuthorizeException('invalid_scope');
       });
     throw new OauthAuthorizeException('invalid_scope');
@@ -220,7 +220,7 @@ export class TokenReqDto {
     if (!value) return [];
     if (typeof value === 'string')
       return value.split(' ').map((v) => {
-        if (ScopeList.includes(v)) return v;
+        if (isScope(v)) return v;
         throw new OauthTokenException('invalid_scope');
       });
     throw new OauthTokenException('invalid_scope');
