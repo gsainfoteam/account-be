@@ -16,6 +16,7 @@ export type GrantContentType =
 export type CodeGrantContentType = {
   grantType: 'authorization_code';
   clientId: string;
+  clientSecret?: string;
 
   code: string;
   codeVerifier: string;
@@ -25,6 +26,7 @@ export type CodeGrantContentType = {
 export type RefreshTokenGrantContentType = {
   grantType: 'refresh_token';
   clientId?: string;
+  clientSecret?: string;
 
   refreshToken: string;
 };

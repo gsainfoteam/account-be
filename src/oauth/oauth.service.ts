@@ -194,9 +194,12 @@ export class OauthService {
    */
   async codeGrant({
     clientId,
+    clientSecret,
     code,
     codeVerifier,
   }: CodeGrantContentType): Promise<TokenResDto> {
+    await this.authenticateClient(clientId, clientSecret);
+
     const cache = await this.redisService
       .getOrThrow<AuthorizeCacheType>(code, {
         prefix: this.CodePrefix,
@@ -295,8 +298,11 @@ export class OauthService {
    */
   async refreshTokenGrant({
     clientId,
+    clientSecret,
     refreshToken,
   }: RefreshTokenGrantContentType): Promise<TokenResDto> {
+    await this.authenticateClient(clientId, clientSecret);
+
     if (!refreshToken) {
       throw new OauthTokenException('invalid_request');
     }
@@ -507,6 +513,32 @@ export class OauthService {
         ? user.isPhoneNumberVerified
         : undefined,
     };
+  }
+
+  /**
+   * authenticate the client at the token endpoint. confidential clients must present their secret,
+   * public clients (browsers, apps) cannot keep one and rely on PKCE alone.
+   * @param clientId client id from the body or basic auth
+   * @param clientSecret client secret from the body or basic auth
+   */
+  private async authenticateClient(
+    clientId: string | undefined,
+    clientSecret: string | undefined,
+  ): Promise<void> {
+    if (!clientId) {
+      throw new OauthTokenException('invalid_client');
+    }
+    const client = await this.clientService
+      .getClientByUuid(clientId)
+      .catch(() => {
+        throw new OauthTokenException('invalid_client');
+      });
+    if (client.tokenEndpointAuthMethod === 'none') {
+      return;
+    }
+    if (!clientSecret || !bcrypt.compareSync(clientSecret, client.secret)) {
+      throw new OauthTokenException('invalid_client');
+    }
   }
 
   /**

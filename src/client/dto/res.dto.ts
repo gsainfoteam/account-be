@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Client, RoleType } from '@prisma/client';
+import { Client, RoleType, TokenEndpointAuthMethod } from '@prisma/client';
 import { Exclude, Expose } from 'class-transformer';
 
 export class ClientResDto implements Client {
@@ -62,6 +62,14 @@ export class ClientResDto implements Client {
     example: true,
   })
   idTokenAllowed: boolean;
+
+  @ApiProperty({
+    description:
+      'how the client authenticates at the token endpoint. "none" for public clients such as browsers and apps',
+    enum: TokenEndpointAuthMethod,
+    example: TokenEndpointAuthMethod.none,
+  })
+  tokenEndpointAuthMethod: TokenEndpointAuthMethod;
 
   @ApiProperty({
     description: 'The date the client requested to be deleted',
@@ -140,6 +148,9 @@ export class ClientPublicResDto implements Client {
   idTokenAllowed: boolean;
 
   @Exclude()
+  tokenEndpointAuthMethod: TokenEndpointAuthMethod;
+
+  @Exclude()
   deleteRequestedAt: Date | null;
 
   constructor(client: Client) {
@@ -189,6 +200,9 @@ export class ClientCredentialResDto implements Client {
 
   @Exclude()
   idTokenAllowed: boolean;
+
+  @Exclude()
+  tokenEndpointAuthMethod: TokenEndpointAuthMethod;
 
   @Exclude()
   scopes: string[];

@@ -12,6 +12,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum TokenEndpointAuthMethod {
+  none
+  client_secret_post
+  client_secret_basic
+}
+
 enum RoleType {
   OWNER
   ADMIN
@@ -55,6 +61,7 @@ model Client {
   deleteRequestedAt DateTime? @map("delete_requested_at")
 
   idTokenAllowed Boolean  @default(false)
+  tokenEndpointAuthMethod TokenEndpointAuthMethod @default(none) @map("token_endpoint_auth_method")
   scopes         String[]
   optionalScopes String[] @map("optional_scopes")
 
