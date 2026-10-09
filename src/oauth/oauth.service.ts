@@ -1,7 +1,11 @@
 import { Trace } from '@gsainfoteam/nest-observability';
 import { Loggable } from '@lib/logger';
 import { CacheNotFoundException, RedisService } from '@lib/redis';
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Client, User } from '@prisma/client';
@@ -445,6 +449,24 @@ export class OauthService {
 
     for (const type of order) {
       if (await this.revokeIfIssuedTo(token, type, client)) return;
+    }
+  }
+
+  /**
+   * revoke the token by the token type hint, as DELETE /oauth/token always did.
+   * @deprecated use {@link OauthService.revoke}, which authenticates the client as RFC 7009 requires.
+   * @param param0 token and token type hint
+   */
+  async revokeDeprecated({
+    token,
+    tokenTypeHint,
+  }: RevokeReqDto): Promise<void> {
+    if (tokenTypeHint === 'access_token') {
+      await this.redisService.del(token, { prefix: this.TokenPrefix });
+    } else if (tokenTypeHint === 'refresh_token') {
+      await this.oauthRepository.deleteRefreshTokenByToken(token);
+    } else {
+      throw new BadRequestException({ error: 'invalid_request' });
     }
   }
 

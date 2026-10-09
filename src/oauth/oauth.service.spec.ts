@@ -1,5 +1,5 @@
 import { CacheNotFoundException } from '@lib/redis';
-import { UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { Client, User } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
@@ -330,6 +330,32 @@ describe('OauthService', () => {
 
       expect(redis.has('token:mine')).toBe(false);
       expect(redis.has('token:theirs')).toBe(true);
+    });
+  });
+
+  describe('revokeDeprecated', () => {
+    it('keeps revoking by token type hint without client authentication', async () => {
+      const { service, redis } = setup();
+      redis.set('token:any', {
+        to: 'user',
+        sub: 'user-1',
+        clientId: 'client-2',
+        scope: [],
+      });
+
+      await service.revokeDeprecated({
+        token: 'any',
+        tokenTypeHint: 'access_token',
+      });
+
+      expect(redis.has('token:any')).toBe(false);
+    });
+
+    it('still requires a token type hint', async () => {
+      const { service } = setup();
+      await expect(
+        service.revokeDeprecated({ token: 'any' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 

@@ -2,6 +2,7 @@ import { OtelClassSerializerInterceptor } from '@gsainfoteam/nest-observability'
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Header,
   Headers,
@@ -118,6 +119,19 @@ export class OauthController {
   @SerializeOptions({ type: TokenResDto })
   token(@Body() body: TokenReqDto): Promise<TokenResDto> {
     return this.oauthService.token(body as GrantContentType);
+  }
+
+  @ApiOperation({
+    summary: 'revoke the token (deprecated)',
+    description:
+      'use POST /oauth/revoke instead. kept with its original behavior so existing callers keep working until they move to the RFC 7009 endpoint.',
+    deprecated: true,
+  })
+  @Delete('token')
+  @Header('Deprecation', '@1791558000')
+  @Header('Link', '</oauth/revoke>; rel="successor-version"')
+  async revokeDeprecated(@Body() body: RevokeReqDto): Promise<void> {
+    return this.oauthService.revokeDeprecated(body);
   }
 
   @ApiOperation({
