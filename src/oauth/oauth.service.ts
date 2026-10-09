@@ -215,7 +215,7 @@ export class OauthService {
     });
 
     if (cache.clientId !== clientId) {
-      throw new OauthTokenException('invalid_client');
+      throw new OauthTokenException('invalid_grant');
     }
     if (cache.codeChallengeMethod === 'S256') {
       const hash = crypto

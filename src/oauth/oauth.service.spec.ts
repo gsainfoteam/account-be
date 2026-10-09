@@ -202,6 +202,24 @@ describe('OauthService', () => {
     });
   });
 
+  describe('token endpoint errors', () => {
+    it('answers a code issued to another client with invalid_grant', async () => {
+      const { service } = setup();
+      const { code } = await authorize(service);
+
+      await expect(
+        errorOf(
+          service.codeGrant({
+            grantType: 'authorization_code',
+            clientId: 'client-2',
+            code,
+            codeVerifier: VERIFIER,
+          }),
+        ),
+      ).resolves.toEqual({ error: 'invalid_grant' });
+    });
+  });
+
   describe('refresh tokens', () => {
     it('stores the nonce of the authorization with the refresh token', async () => {
       const { service, oauthRepository } = setup();

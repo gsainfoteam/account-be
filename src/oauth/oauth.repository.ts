@@ -31,7 +31,7 @@ export class OauthRepository {
         if (error instanceof PrismaClientKnownRequestError) {
           if (error.code === 'P2025') {
             this.logger.debug(`Refresh token not found: ${token}`);
-            throw new OauthTokenException('invalid_request');
+            throw new OauthTokenException('invalid_grant');
           }
           this.logger.error('database error', error);
         }
@@ -75,7 +75,7 @@ export class OauthRepository {
         if (error instanceof PrismaClientKnownRequestError) {
           if (error.code === 'P2025') {
             this.logger.debug(`Refresh token not found: ${token}`);
-            throw new OauthTokenException('invalid_request');
+            throw new OauthTokenException('invalid_grant');
           }
           this.logger.error('database error', error);
         }
