@@ -324,6 +324,21 @@ export class OauthService {
     if (refreshTokenData.clientUuid !== clientId) {
       throw new OauthTokenException('invalid_grant');
     }
+
+    // a rotated refresh token coming back means it leaked, so the whole grant ends (OAuth 2.1 section 4.3.1)
+    const rotated =
+      !refreshTokenData.usedAt &&
+      (await this.oauthRepository.markRefreshTokenUsed(refreshToken));
+    if (!rotated) {
+      await this.oauthRepository.deleteRefreshTokenFamily(
+        refreshTokenData.familyId,
+      );
+      throw new OauthTokenException('invalid_grant');
+    }
+    await this.oauthRepository.pruneRefreshTokenFamily(
+      refreshTokenData.familyId,
+    );
+
     const scopes = refreshTokenData.scopes.filter(isScope);
 
     const accessToken = this.generateOpaqueToken();
@@ -350,6 +365,7 @@ export class OauthService {
         refreshTokenData.userUuid,
         refreshTokenData.clientUuid,
         refreshTokenData.nonce ?? undefined,
+        refreshTokenData.familyId,
       );
     }
 
@@ -374,7 +390,6 @@ export class OauthService {
           : undefined,
       });
     }
-    await this.oauthRepository.deleteRefreshTokenByToken(refreshToken);
 
     return {
       accessToken,
@@ -491,7 +506,7 @@ export class OauthService {
       .catch(() => null);
     if (stored?.clientUuid !== clientId) return false;
 
-    await this.oauthRepository.deleteRefreshTokenByToken(token);
+    await this.oauthRepository.deleteRefreshTokenFamily(stored.familyId);
     return true;
   }
 

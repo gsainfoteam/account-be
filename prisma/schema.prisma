@@ -92,12 +92,18 @@ model RefreshToken {
   nonce     String?  @db.VarChar(255)
   scopes    String[]
 
+  /// every refresh token rotated from the same authorization shares this id
+  familyId String    @default(uuid()) @db.Uuid
+  /// set when the token is rotated. a used token that comes back means it leaked
+  usedAt   DateTime?
+
   clientUuid String @db.Uuid
   userUuid   String @db.Uuid
 
   client Client @relation(fields: [clientUuid], references: [uuid], onDelete: Cascade)
   user   User   @relation(fields: [userUuid], references: [uuid], onDelete: Cascade)
 
+  @@index([familyId])
   @@map("refresh_token")
 }
 
