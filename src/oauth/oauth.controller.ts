@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   Headers,
   HttpCode,
   HttpRedirectResponse,
@@ -112,6 +113,8 @@ export class OauthController {
   @UseFilters(OauthTokenExceptionFilter)
   @Post('token')
   @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'no-store')
+  @Header('Pragma', 'no-cache')
   @SerializeOptions({ type: TokenResDto })
   token(@Body() body: TokenReqDto): Promise<TokenResDto> {
     return this.oauthService.token(body as GrantContentType);
