@@ -79,7 +79,7 @@ jobs:
 
       - name: Update Kubernetes Manifest
         run: |
-          sed -i "s|tag:.*|tag: $IMAGE_TAG|g" infoteam/service/account/values.stg.yaml
+          sed -i "s|tag:.*|tag: $IMAGE_TAG|g" infoteam/service-v2/account/staging/values.yaml
 
       - name: Commit and Push
         run: |

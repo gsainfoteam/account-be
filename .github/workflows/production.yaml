@@ -3,7 +3,7 @@ name: Update Kubernetes Cluster (Prod)
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 env:
   REGISTRY: ghcr.io
@@ -75,7 +75,7 @@ jobs:
 
       - name: Update Kubernetes Manifestd
         run: |
-          sed -i "s|tag:.*|tag: $IMAGE_TAG|g" infoteam/service/account/values.prod.yaml
+          sed -i "s|tag:.*|tag: $IMAGE_TAG|g" infoteam/service-v2/account/prod/values.yaml
 
       - name: Commit and Push
         run: |
