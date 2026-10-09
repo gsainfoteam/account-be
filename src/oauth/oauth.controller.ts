@@ -12,6 +12,7 @@ import {
   Redirect,
   SerializeOptions,
   UnauthorizedException,
+  UseFilters,
   UseGuards,
   UseInterceptors,
   UsePipes,
@@ -37,6 +38,7 @@ import {
   TokenReqDto,
 } from './dto/req.dto';
 import { TokenResDto, UserInfoResDto } from './dto/res.dto';
+import { OauthTokenExceptionFilter } from './filters/oauthToken.filter';
 import { BasicAuthGuard } from './guards/basicAuth.guard';
 import { OauthService } from './oauth.service';
 import { GrantContentType } from './types/grant.type';
@@ -107,6 +109,7 @@ export class OauthController {
   @ApiConsumes('application/x-www-form-urlencoded', 'application/json')
   @ApiBadRequestResponse({ description: 'invalid request' })
   @UseGuards(BasicAuthGuard)
+  @UseFilters(OauthTokenExceptionFilter)
   @Post('token')
   @HttpCode(HttpStatus.OK)
   @SerializeOptions({ type: TokenResDto })
@@ -121,6 +124,7 @@ export class OauthController {
   })
   @ApiConsumes('application/x-www-form-urlencoded', 'application/json')
   @UseGuards(BasicAuthGuard)
+  @UseFilters(OauthTokenExceptionFilter)
   @Post('revoke')
   @HttpCode(HttpStatus.OK)
   async revoke(@Body() body: RevokeReqDto): Promise<void> {
