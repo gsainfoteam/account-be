@@ -6,6 +6,7 @@ import * as crypto from 'crypto';
 
 import { OauthTokenException } from './exceptions/oauth.token.exception';
 import { OauthService } from './oauth.service';
+import { ScopeType } from './types/scope.type';
 
 const SECRET = 'client-secret';
 const VERIFIER = 'v'.repeat(43);
@@ -36,34 +37,39 @@ function setup(registered: Client = client()) {
   const redis = new Map<string, unknown>();
   const redisService = {
     set: jest.fn(
-      async (key: string, value: unknown, { prefix }: { prefix: string }) => {
+      (key: string, value: unknown, { prefix }: { prefix: string }) => {
         redis.set(`${prefix}:${key}`, value);
+        return Promise.resolve();
       },
     ),
-    get: jest.fn(
-      async (key: string, { prefix }: { prefix: string }) =>
-        redis.get(`${prefix}:${key}`) ?? null,
+    get: jest.fn((key: string, { prefix }: { prefix: string }) =>
+      Promise.resolve(redis.get(`${prefix}:${key}`) ?? null),
     ),
-    getOrThrow: jest.fn(async (key: string, { prefix }: { prefix: string }) => {
-      if (!redis.has(`${prefix}:${key}`))
-        throw new CacheNotFoundException(`${prefix}:${key}`);
-      return redis.get(`${prefix}:${key}`);
-    }),
-    del: jest.fn(async (key: string, { prefix }: { prefix: string }) => {
+    getOrThrow: jest.fn((key: string, { prefix }: { prefix: string }) =>
+      redis.has(`${prefix}:${key}`)
+        ? Promise.resolve(redis.get(`${prefix}:${key}`))
+        : Promise.reject(new CacheNotFoundException(`${prefix}:${key}`)),
+    ),
+    del: jest.fn((key: string, { prefix }: { prefix: string }) => {
       redis.delete(`${prefix}:${key}`);
+      return Promise.resolve();
     }),
   };
   const oauthRepository = {
-    findConsent: jest.fn(async () => ({ scopes: ['name'] })),
-    createRefreshToken: jest.fn(async () => undefined),
-    findRefreshTokenByToken: jest.fn(async () => {
-      throw new OauthTokenException('invalid_grant');
-    }),
-    deleteRefreshTokenByToken: jest.fn(async () => undefined),
+    findConsent: jest.fn(() => Promise.resolve({ scopes: ['name'] })),
+    createRefreshToken: jest.fn(() => Promise.resolve()),
+    findRefreshTokenByToken: jest.fn(() =>
+      Promise.reject(new OauthTokenException('invalid_grant')),
+    ),
+    deleteRefreshTokenByToken: jest.fn(() => Promise.resolve()),
   };
-  const clientService = { getClientByUuid: jest.fn(async () => registered) };
+  const clientService = {
+    getClientByUuid: jest.fn(() => Promise.resolve(registered)),
+  };
   const userService = {
-    findUserByUuid: jest.fn(async () => ({ uuid: 'user-1', name: '홍길동' })),
+    findUserByUuid: jest.fn(() =>
+      Promise.resolve({ uuid: 'user-1', name: '홍길동' }),
+    ),
   };
   const configService = {
     getOrThrow: jest.fn(() => 'https://api.account.example'),
@@ -83,7 +89,7 @@ function setup(registered: Client = client()) {
 
 const user = { uuid: 'user-1' } as User;
 
-async function authorize(service: OauthService, scope = ['name']) {
+async function authorize(service: OauthService, scope: ScopeType[] = ['name']) {
   const url = new URL(
     await service.authorize(
       {
@@ -92,7 +98,7 @@ async function authorize(service: OauthService, scope = ['name']) {
         codeChallenge: CHALLENGE,
         codeChallengeMethod: 'S256',
         redirectUri: 'https://app.example/callback?from=login',
-        scope: scope as never,
+        scope,
         state: 'a b&c',
         nonce: scope.includes('openid') ? 'n-1' : undefined,
       },
