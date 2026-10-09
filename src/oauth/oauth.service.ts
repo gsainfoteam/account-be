@@ -1,6 +1,6 @@
 import { Trace } from '@gsainfoteam/nest-observability';
 import { Loggable } from '@lib/logger';
-import { RedisService } from '@lib/redis';
+import { CacheNotFoundException, RedisService } from '@lib/redis';
 import {
   BadRequestException,
   Injectable,
@@ -508,12 +508,16 @@ export class OauthService {
    * @returns the user info
    */
   async userinfo(token: string, userUuid?: string): Promise<UserInfoResDto> {
-    const tokenData = await this.redisService.getOrThrow<TokenCacheType>(
-      token,
-      {
+    const tokenData = await this.redisService
+      .getOrThrow<TokenCacheType>(token, {
         prefix: this.TokenPrefix,
-      },
-    );
+      })
+      .catch((error) => {
+        if (error instanceof CacheNotFoundException) {
+          throw new UnauthorizedException();
+        }
+        throw error;
+      });
 
     let user: User;
     if (tokenData.to === 'client') {

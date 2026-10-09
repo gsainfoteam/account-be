@@ -1,6 +1,5 @@
 import { OtelClassSerializerInterceptor } from '@gsainfoteam/nest-observability';
 import {
-  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -14,6 +13,7 @@ import {
   Redirect,
   SerializeOptions,
   UseGuards,
+  UnauthorizedException,
   UseInterceptors,
   UsePipes,
   ValidationPipe,
@@ -146,12 +146,12 @@ export class OauthController {
   @Get('userinfo')
   @SerializeOptions({ type: UserInfoResDto })
   async userinfo(
-    @Headers('Authorization') authorizationHeader: string,
+    @Headers('Authorization') authorizationHeader: string | undefined,
     @Query('sub') sub?: string,
   ): Promise<UserInfoResDto> {
-    const [type, token] = authorizationHeader.split(' ');
-    if (type !== 'Bearer') {
-      throw new BadRequestException('invalid token type');
+    const [type, token] = (authorizationHeader ?? '').split(' ');
+    if (type !== 'Bearer' || !token) {
+      throw new UnauthorizedException();
     }
     return this.oauthService.userinfo(token, sub);
   }
