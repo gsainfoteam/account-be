@@ -253,6 +253,7 @@ export class OauthService {
         cache.scope,
         cache.UserUuid,
         cache.clientId,
+        cache.nonce,
       );
     }
 
@@ -341,6 +342,7 @@ export class OauthService {
         refreshTokenData.scopes,
         refreshTokenData.userUuid,
         refreshTokenData.clientUuid,
+        refreshTokenData.nonce ?? undefined,
       );
     }
 
