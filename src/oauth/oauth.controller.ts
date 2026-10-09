@@ -40,6 +40,7 @@ import {
   TokenReqDto,
 } from './dto/req.dto';
 import { TokenResDto, UserInfoResDto } from './dto/res.dto';
+import { OauthAuthorizeExceptionFilter } from './filters/oauthAuthorize.filter';
 import { OauthTokenExceptionFilter } from './filters/oauthToken.filter';
 import { BasicAuthGuard } from './guards/basicAuth.guard';
 import { OauthService } from './oauth.service';
@@ -93,6 +94,7 @@ export class OauthController {
   @Redirect()
   @Get('authorize')
   @UseGuards(UserGuard)
+  @UseFilters(OauthAuthorizeExceptionFilter)
   async authorize(
     @Query() query: AuthorizationReqDto,
     @GetUser() user: User,

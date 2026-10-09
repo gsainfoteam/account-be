@@ -117,13 +117,24 @@ export class OauthService {
     }: AuthorizationReqDto,
     user: User,
   ): Promise<string> {
-    // recommend: integrate the query below two lines.
+    // client_id and redirect_uri come first: until both are trusted, errors must not be redirected
     const client = await this.clientService
       .getClientByUuid(clientId)
       .catch(() => {
-        throw new OauthAuthorizeException('unauthorized_client');
+        throw new OauthAuthorizeException('invalid_request');
       });
-    const consent = await this.oauthRepository.findConsent(user.uuid, clientId);
+    if (!client.urls.includes(redirectUri)) {
+      throw new OauthAuthorizeException('invalid_request');
+    }
+
+    const consent = await this.oauthRepository
+      .findConsent(user.uuid, clientId)
+      .catch((error: unknown) => {
+        if (error instanceof OauthTokenException) {
+          throw new OauthAuthorizeException('access_denied');
+        }
+        throw error;
+      });
 
     // check if the client has the scope
     scope.forEach((s) => {
@@ -131,10 +142,6 @@ export class OauthService {
         throw new OauthAuthorizeException('invalid_scope');
       }
     });
-    // check if the redirect_uri is in the client's urls
-    if (!client.urls.includes(redirectUri)) {
-      throw new OauthAuthorizeException('access_denied');
-    }
     // check if the id token is supported
     if (scope.includes('openid')) {
       if (!client.idTokenAllowed) {

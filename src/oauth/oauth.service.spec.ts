@@ -4,6 +4,7 @@ import { Client, User } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 
+import { AuthorizationReqDto } from './dto/req.dto';
 import { OauthTokenException } from './exceptions/oauth.token.exception';
 import { OauthService } from './oauth.service';
 import { ScopeType } from './types/scope.type';
@@ -89,22 +90,25 @@ function setup(registered: Client = client()) {
 
 const user = { uuid: 'user-1' } as User;
 
+function authorizeRequest(
+  scope: ScopeType[] = ['name'],
+  overrides: Partial<AuthorizationReqDto> = {},
+): AuthorizationReqDto {
+  return {
+    responseType: 'code',
+    clientId: 'client-1',
+    codeChallenge: CHALLENGE,
+    codeChallengeMethod: 'S256',
+    redirectUri: 'https://app.example/callback?from=login',
+    scope,
+    state: 'a b&c',
+    nonce: scope.includes('openid') ? 'n-1' : undefined,
+    ...overrides,
+  };
+}
+
 async function authorize(service: OauthService, scope: ScopeType[] = ['name']) {
-  const url = new URL(
-    await service.authorize(
-      {
-        responseType: 'code',
-        clientId: 'client-1',
-        codeChallenge: CHALLENGE,
-        codeChallengeMethod: 'S256',
-        redirectUri: 'https://app.example/callback?from=login',
-        scope,
-        state: 'a b&c',
-        nonce: scope.includes('openid') ? 'n-1' : undefined,
-      },
-      user,
-    ),
-  );
+  const url = new URL(await service.authorize(authorizeRequest(scope), user));
   return { url, code: url.searchParams.get('code')! };
 }
 
@@ -124,6 +128,33 @@ describe('OauthService', () => {
       expect(url.searchParams.get('from')).toBe('login');
       expect(url.searchParams.get('state')).toBe('a b&c');
       expect(url.searchParams.get('iss')).toBe('https://api.account.example');
+    });
+
+    it('checks the redirect URI before anything that could be redirected', async () => {
+      const { service, oauthRepository } = setup();
+
+      await expect(
+        errorOf(
+          service.authorize(
+            authorizeRequest(['student_id'], {
+              redirectUri: 'https://evil.example/callback',
+            }),
+            user,
+          ),
+        ),
+      ).resolves.toEqual({ error: 'invalid_request' });
+      expect(oauthRepository.findConsent).not.toHaveBeenCalled();
+    });
+
+    it('denies a user who has not consented to the client', async () => {
+      const { service, oauthRepository } = setup();
+      oauthRepository.findConsent.mockImplementation(() =>
+        Promise.reject(new OauthTokenException('invalid_grant')),
+      );
+
+      await expect(
+        errorOf(service.authorize(authorizeRequest(), user)),
+      ).resolves.toEqual({ error: 'access_denied' });
     });
   });
 
