@@ -163,10 +163,12 @@ export class OauthService {
       },
     );
 
-    return (
-      `${redirectUri}?code=${code}&iss=${this.configService.getOrThrow<string>('JWT_ISSUER')}` +
-      (state ? `&state=${state}` : '')
-    );
+    const url = new URL(redirectUri);
+    url.searchParams.set('code', code);
+    url.searchParams.set('iss', this.configService.getOrThrow<string>('JWT_ISSUER'));
+    if (state) url.searchParams.set('state', state);
+
+    return url.toString();
   }
 
   /**
