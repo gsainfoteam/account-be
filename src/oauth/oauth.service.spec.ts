@@ -59,8 +59,9 @@ function setup(registered: Client = client()) {
   const oauthRepository = {
     findConsent: jest.fn(() => Promise.resolve({ scopes: ['name'] })),
     createRefreshToken: jest.fn(() => Promise.resolve()),
-    findRefreshTokenByToken: jest.fn((): Promise<RefreshToken> =>
-      Promise.reject(new OauthTokenException('invalid_grant')),
+    findRefreshTokenByToken: jest.fn(
+      (): Promise<RefreshToken> =>
+        Promise.reject(new OauthTokenException('invalid_grant')),
     ),
     deleteRefreshTokenByToken: jest.fn(() => Promise.resolve()),
     markRefreshTokenUsed: jest.fn(() => Promise.resolve(true)),
