@@ -203,6 +203,15 @@ describe('OauthService', () => {
     });
   });
 
+  describe('openid', () => {
+    it('issues codes for openid whatever idTokenAllowed says', async () => {
+      const { service } = setup(client({ idTokenAllowed: false }));
+      const { code } = await authorize(service, ['openid', 'name']);
+
+      expect(code).toEqual(expect.any(String));
+    });
+  });
+
   describe('token endpoint client authentication', () => {
     it('lets a public client exchange a code with PKCE alone', async () => {
       const { service } = setup();

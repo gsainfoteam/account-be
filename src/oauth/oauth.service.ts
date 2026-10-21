@@ -142,14 +142,9 @@ export class OauthService {
         throw new OauthAuthorizeException('invalid_scope');
       }
     });
-    // check if the id token is supported
-    if (scope.includes('openid')) {
-      if (!client.idTokenAllowed) {
-        throw new OauthAuthorizeException('invalid_scope');
-      }
-      if (!nonce) {
-        throw new OauthAuthorizeException('invalid_request');
-      }
+    // an id_token carries only the claims userinfo already gives this client, so every client may ask for one
+    if (scope.includes('openid') && !nonce) {
+      throw new OauthAuthorizeException('invalid_request');
     }
 
     const code = this.generateOpaqueToken();
