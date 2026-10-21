@@ -21,6 +21,8 @@ const config: Config.InitialOptions = {
     '^@lib/([^/]+)$': '<rootDir>/libs/$1/src',
     '^@lib/([^/]+)/(.*)$': '<rootDir>/libs/$1/src/$2',
     '^src/(.*)$': '<rootDir>/src/$1',
+    '^@gsainfoteam/nest-observability$':
+      '<rootDir>/test/unit/mocks/nest-observability.ts',
   },
   preset: 'ts-jest',
   moduleDirectories: ['node_modules', '<rootDir>/libs'],
