@@ -185,6 +185,41 @@ describe('OauthService', () => {
     });
   });
 
+  describe('authorizeErrorRedirect', () => {
+    it('reports the error to a registered redirect URI with state and iss', async () => {
+      const { service } = setup();
+      const url = new URL(
+        (await service.authorizeErrorRedirect({
+          clientId: 'client-1',
+          redirectUri: 'https://app.example/callback?from=login',
+          state: 'a b&c',
+          error: 'access_denied',
+          errorDescription: 'user_cancelled',
+        }))!,
+      );
+
+      expect(Object.fromEntries(url.searchParams)).toEqual({
+        from: 'login',
+        error: 'access_denied',
+        error_description: 'user_cancelled',
+        iss: 'https://api.account.example',
+        state: 'a b&c',
+      });
+    });
+
+    it('refuses a redirect URI the client did not register', async () => {
+      const { service } = setup();
+
+      await expect(
+        service.authorizeErrorRedirect({
+          clientId: 'client-1',
+          redirectUri: 'https://evil.example/callback',
+          error: 'login_required',
+        }),
+      ).resolves.toBeNull();
+    });
+  });
+
   describe('PKCE', () => {
     it('rejects a verifier that does not hash to the challenge', async () => {
       const { service } = setup();

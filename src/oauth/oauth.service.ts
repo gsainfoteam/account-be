@@ -23,6 +23,7 @@ import { TokenResDto, UserInfoResDto } from './dto/res.dto';
 import { OauthAuthorizeException } from './exceptions/oauth.authorize.exception';
 import { OauthTokenException } from './exceptions/oauth.token.exception';
 import { OauthRepository } from './oauth.repository';
+import { AuthorizeError } from './types/authorizationError.type';
 import { AuthorizeCacheType } from './types/authorizeCache.type';
 import {
   ClientCredentialsGrantContentType,
@@ -167,6 +168,45 @@ export class OauthService {
 
     const url = new URL(redirectUri);
     url.searchParams.set('code', code);
+    url.searchParams.set(
+      'iss',
+      this.configService.getOrThrow<string>('JWT_ISSUER'),
+    );
+    if (state) url.searchParams.set('state', state);
+
+    return url.toString();
+  }
+
+  /**
+   * build the redirect that reports an authorize error to the client, as RFC 6749 section 4.1.2.1 and RFC 9207 describe
+   * @param param0 the client, where it asked to be redirected, and the error to report
+   * @returns the redirect url, or null when client_id or redirect_uri cannot be trusted and the error must be shown to the user instead
+   */
+  async authorizeErrorRedirect({
+    clientId,
+    redirectUri,
+    state,
+    error,
+    errorDescription,
+  }: {
+    clientId: string | null;
+    redirectUri: string | null;
+    state?: string | null;
+    error: AuthorizeError;
+    errorDescription?: string;
+  }): Promise<string | null> {
+    if (!clientId || !redirectUri) return null;
+
+    const client = await this.clientService
+      .getClientByUuid(clientId)
+      .catch(() => null);
+    if (!client?.urls.includes(redirectUri)) return null;
+
+    const url = new URL(redirectUri);
+    url.searchParams.set('error', error);
+    if (errorDescription) {
+      url.searchParams.set('error_description', errorDescription);
+    }
     url.searchParams.set(
       'iss',
       this.configService.getOrThrow<string>('JWT_ISSUER'),

@@ -1,5 +1,6 @@
 import { OtelClassSerializerInterceptor } from '@gsainfoteam/nest-observability';
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -35,12 +36,16 @@ import { UserGuard } from 'src/auth/guard/auth.guard';
 
 import {
   AuthorizationReqDto,
+  AuthorizeErrorReqDto,
   ConsentReqDto,
   RevokeReqDto,
   TokenReqDto,
 } from './dto/req.dto';
 import { TokenResDto, UserInfoResDto } from './dto/res.dto';
-import { OauthAuthorizeExceptionFilter } from './filters/oauthAuthorize.filter';
+import {
+  OauthAuthorizeExceptionFilter,
+  UNTRUSTED_REDIRECT,
+} from './filters/oauthAuthorize.filter';
 import { OauthTokenExceptionFilter } from './filters/oauthToken.filter';
 import { BasicAuthGuard } from './guards/basicAuth.guard';
 import { OauthService } from './oauth.service';
@@ -103,6 +108,25 @@ export class OauthController {
       url: await this.oauthService.authorize(query, user),
       statusCode: 302,
     };
+  }
+
+  @ApiOperation({
+    summary: 'report an authorize error to the client',
+    description:
+      'account-fe sends the user here when it turns an authorize request away. the error is redirected to redirect_uri only when it is registered for the client.',
+  })
+  @ApiBadRequestResponse({
+    description: 'unknown client_id or unregistered redirect_uri',
+  })
+  @Redirect()
+  @Get('authorize/error')
+  async authorizeError(
+    @Query() query: AuthorizeErrorReqDto,
+  ): Promise<HttpRedirectResponse> {
+    const url = await this.oauthService.authorizeErrorRedirect(query);
+    if (!url) throw new BadRequestException(UNTRUSTED_REDIRECT);
+
+    return { url, statusCode: 302 };
   }
 
   @ApiOperation({

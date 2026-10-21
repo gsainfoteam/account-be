@@ -274,3 +274,45 @@ export class RevokeReqDto {
   @IsOptional()
   tokenTypeHint?: 'access_token' | 'refresh_token';
 }
+
+/** errors account-fe reports through GET /oauth/authorize/error */
+export const ReportedAuthorizeErrorList = [
+  'access_denied',
+  'login_required',
+  'consent_required',
+  'interaction_required',
+] as const;
+/** reasons account-fe puts in error_description, kept to a closed list so arbitrary text never reaches the client */
+export const DenialReasonList = [
+  'user_cancelled',
+  'verification_required',
+  'consent_required',
+  'login_required',
+] as const;
+
+export class AuthorizeErrorReqDto {
+  @ApiProperty({ name: 'client_id' })
+  @Expose({ name: 'client_id' })
+  @IsString()
+  clientId: string;
+
+  @ApiProperty({ name: 'redirect_uri' })
+  @Expose({ name: 'redirect_uri' })
+  @IsString()
+  redirectUri: string;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  state?: string;
+
+  @ApiProperty({ enum: ReportedAuthorizeErrorList })
+  @IsIn(ReportedAuthorizeErrorList)
+  error: (typeof ReportedAuthorizeErrorList)[number];
+
+  @ApiPropertyOptional({ name: 'error_description', enum: DenialReasonList })
+  @Expose({ name: 'error_description' })
+  @IsIn(DenialReasonList)
+  @IsOptional()
+  errorDescription?: (typeof DenialReasonList)[number];
+}

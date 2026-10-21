@@ -3,9 +3,7 @@ import { ArgumentsHost, BadRequestException } from '@nestjs/common';
 import { OauthAuthorizeException } from '../exceptions/oauth.authorize.exception';
 import { OauthAuthorizeExceptionFilter } from './oauthAuthorize.filter';
 
-const REDIRECT_URI = 'https://app.example/callback?from=login';
-
-async function run(error: BadRequestException, query: Record<string, string>) {
+async function run(error: BadRequestException, redirect: string | null) {
   const headers: Record<string, string> = {};
   const sent: { status?: number; body?: unknown } = {};
   const reply = {
@@ -25,81 +23,61 @@ async function run(error: BadRequestException, query: Record<string, string>) {
   const host = {
     switchToHttp: () => ({
       getRequest: () => ({
-        url: `/oauth/authorize?${new URLSearchParams(query).toString()}`,
+        url: '/oauth/authorize?client_id=client-1&redirect_uri=https%3A%2F%2Fapp.example%2Fcb&state=s-1',
       }),
       getResponse: () => reply,
     }),
   } as unknown as ArgumentsHost;
-  const clientService = {
-    getClientByUuid: jest.fn((uuid: string) =>
-      uuid === 'client-1'
-        ? Promise.resolve({ urls: [REDIRECT_URI] })
-        : Promise.reject(new Error('not found')),
-    ),
-  };
-  const configService = {
-    getOrThrow: jest.fn(() => 'https://api.account.example'),
+  const oauthService = {
+    authorizeErrorRedirect: jest.fn(() => Promise.resolve(redirect)),
   };
 
-  await new OauthAuthorizeExceptionFilter(
-    clientService as never,
-    configService as never,
-  ).catch(error, host);
+  await new OauthAuthorizeExceptionFilter(oauthService as never).catch(
+    error,
+    host,
+  );
 
-  const location = headers['Location'] ? new URL(headers['Location']) : null;
-  return { location, ...sent };
+  return { headers, oauthService, ...sent };
 }
 
 describe('OauthAuthorizeExceptionFilter', () => {
-  it('sends the error back to a registered redirect URI with state and iss', async () => {
-    const result = await run(new OauthAuthorizeException('invalid_scope'), {
-      client_id: 'client-1',
-      redirect_uri: REDIRECT_URI,
-      state: 'a b&c',
-    });
+  it('redirects the error with the query the browser sent', async () => {
+    const result = await run(
+      new OauthAuthorizeException('invalid_scope'),
+      'https://app.example/cb?error=invalid_scope',
+    );
 
     expect(result.status).toBe(302);
-    expect(result.location?.origin + result.location!.pathname).toBe(
-      'https://app.example/callback',
+    expect(result.headers['Location']).toBe(
+      'https://app.example/cb?error=invalid_scope',
     );
-    expect(Object.fromEntries(result.location!.searchParams)).toEqual({
-      from: 'login',
+    expect(result.oauthService.authorizeErrorRedirect).toHaveBeenCalledWith({
+      clientId: 'client-1',
+      redirectUri: 'https://app.example/cb',
+      state: 's-1',
       error: 'invalid_scope',
-      state: 'a b&c',
-      iss: 'https://api.account.example',
     });
   });
 
   it('reports a query that failed validation as invalid_request', async () => {
     const result = await run(
       new BadRequestException(['nonce must be a string']),
-      {
-        client_id: 'client-1',
-        redirect_uri: REDIRECT_URI,
-      },
+      'https://app.example/cb?error=invalid_request',
     );
 
-    expect(result.location?.searchParams.get('error')).toBe('invalid_request');
+    expect(result.oauthService.authorizeErrorRedirect).toHaveBeenCalledWith(
+      expect.objectContaining({ error: 'invalid_request' }),
+    );
   });
 
-  it('never redirects to a URI the client did not register', async () => {
-    const result = await run(new OauthAuthorizeException('invalid_scope'), {
-      client_id: 'client-1',
-      redirect_uri: 'https://evil.example/callback',
-    });
+  it('shows the error instead of redirecting when the redirect cannot be trusted', async () => {
+    const result = await run(
+      new OauthAuthorizeException('invalid_scope'),
+      null,
+    );
 
     expect(result.status).toBe(400);
-    expect(result.location).toBeNull();
+    expect(result.headers['Location']).toBeUndefined();
     expect(result.body).toMatchObject({ error: 'invalid_request' });
-  });
-
-  it('never redirects for an unknown client', async () => {
-    const result = await run(new OauthAuthorizeException('invalid_scope'), {
-      client_id: 'someone',
-      redirect_uri: REDIRECT_URI,
-    });
-
-    expect(result.status).toBe(400);
-    expect(result.location).toBeNull();
   });
 });
