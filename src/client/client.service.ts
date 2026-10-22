@@ -2,7 +2,12 @@ import { Trace } from '@gsainfoteam/nest-observability';
 import { Loggable } from '@lib/logger/decorator/loggable';
 import { ObjectService } from '@lib/object';
 import { ForbiddenException, Injectable } from '@nestjs/common';
-import { Client, RoleType, User } from '@prisma/client';
+import {
+  Client,
+  RoleType,
+  TokenEndpointAuthMethod,
+  User,
+} from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { SlackService } from 'nestjs-slack';
@@ -93,6 +98,8 @@ export class ClientService {
         name,
         urls,
         secret: hashed,
+        // A new client is a confidential RP backend; public clients opt out by updating the method.
+        tokenEndpointAuthMethod: TokenEndpointAuthMethod.client_secret_post,
       },
       user.uuid,
     );
