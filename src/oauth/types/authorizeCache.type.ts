@@ -1,3 +1,5 @@
+import { AuthContext } from 'src/auth/types/authContext.type';
+
 import { CodeChallengeMethod } from './codeChallengeMethod.type';
 import { ScopeType } from './scope.type';
 
@@ -9,4 +11,4 @@ export type AuthorizeCacheType = {
   redirectUri: string;
   scope: ScopeType[];
   nonce?: string;
-};
+} & Partial<AuthContext>;

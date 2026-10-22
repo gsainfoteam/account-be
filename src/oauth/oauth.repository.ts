@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Consent, RefreshToken } from '@prisma/client';
+import { AuthContext } from 'src/auth/types/authContext.type';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 
 import { OauthTokenException } from './exceptions/oauth.token.exception';
@@ -45,22 +46,17 @@ export class OauthRepository {
     return refreshToken;
   }
 
-  async createRefreshToken(
-    token: string,
-    scopes: string[],
-    userUuid: string,
-    clientUuid: string,
-    nonce?: string,
-    familyId?: string,
-  ): Promise<RefreshToken> {
+  async createRefreshToken({
+    authTime,
+    ...refreshToken
+  }: Pick<RefreshToken, 'token' | 'scopes' | 'userUuid' | 'clientUuid'> &
+    Partial<Pick<RefreshToken, 'nonce' | 'familyId'>> &
+    Partial<AuthContext>): Promise<RefreshToken> {
     return this.prismaService.refreshToken.create({
       data: {
-        token,
-        userUuid,
-        clientUuid,
-        scopes,
-        nonce,
-        familyId,
+        ...refreshToken,
+        authTime:
+          authTime === undefined ? undefined : new Date(authTime * 1000),
         expiresAt: new Date(Date.now() + MAX_REFRESH_TOKEN_AGE * 1000),
       },
     });

@@ -8,9 +8,10 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { Client, User } from '@prisma/client';
+import { Client, RefreshToken, User } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
+import { AuthContext } from 'src/auth/types/authContext.type';
 import { ClientService } from 'src/client/client.service';
 import { UserService } from 'src/user/user.service';
 
@@ -117,6 +118,7 @@ export class OauthService {
       nonce,
     }: AuthorizationReqDto,
     user: User,
+    auth?: AuthContext,
   ): Promise<string> {
     // client_id and redirect_uri come first: until both are trusted, errors must not be redirected
     const client = await this.clientService
@@ -159,6 +161,7 @@ export class OauthService {
         redirectUri,
         scope,
         nonce,
+        ...auth,
       },
       {
         prefix: this.CodePrefix,
@@ -320,13 +323,15 @@ export class OauthService {
     let refreshToken = undefined;
     if (cache.scope.includes('offline_access')) {
       refreshToken = this.generateOpaqueToken();
-      await this.oauthRepository.createRefreshToken(
-        refreshToken,
-        cache.scope,
-        cache.UserUuid,
-        cache.clientId,
-        cache.nonce,
-      );
+      await this.oauthRepository.createRefreshToken({
+        token: refreshToken,
+        scopes: cache.scope,
+        userUuid: cache.UserUuid,
+        clientUuid: cache.clientId,
+        nonce: cache.nonce,
+        authTime: cache.authTime,
+        amr: cache.amr,
+      });
     }
 
     let idToken = undefined;
@@ -339,6 +344,8 @@ export class OauthService {
         sub: cache.UserUuid,
         aud: cache.clientId,
         nonce: cache.nonce,
+        auth_time: cache.authTime,
+        amr: cache.amr,
         scope: cache.scope.join(' '),
         profile: cache.scope.includes('profile') ? user.profile : undefined,
         picture: cache.scope.includes('picture') ? user.picture : undefined,
@@ -406,6 +413,7 @@ export class OauthService {
     );
 
     const scopes = refreshTokenData.scopes.filter(isScope);
+    const auth = authContextOf(refreshTokenData);
 
     const accessToken = this.generateOpaqueToken();
     await this.redisService.set<TokenCacheType>(
@@ -425,14 +433,15 @@ export class OauthService {
     let newRefreshToken = undefined;
     if (scopes.includes('offline_access')) {
       newRefreshToken = this.generateOpaqueToken();
-      await this.oauthRepository.createRefreshToken(
-        newRefreshToken,
+      await this.oauthRepository.createRefreshToken({
+        token: newRefreshToken,
         scopes,
-        refreshTokenData.userUuid,
-        refreshTokenData.clientUuid,
-        refreshTokenData.nonce ?? undefined,
-        refreshTokenData.familyId,
-      );
+        userUuid: refreshTokenData.userUuid,
+        clientUuid: refreshTokenData.clientUuid,
+        nonce: refreshTokenData.nonce,
+        familyId: refreshTokenData.familyId,
+        ...auth,
+      });
     }
 
     let idToken = undefined;
@@ -446,6 +455,8 @@ export class OauthService {
         aud: refreshTokenData.clientUuid,
         scope: scopes.join(' '),
         nonce: refreshTokenData.nonce ?? undefined,
+        auth_time: auth.authTime,
+        amr: auth.amr,
         profile: scopes.includes('profile') ? user.profile : undefined,
         picture: scopes.includes('picture') ? user.picture : undefined,
         name: scopes.includes('name') ? user.name : undefined,
@@ -684,4 +695,12 @@ export class OauthService {
   private generateOpaqueToken(): string {
     return crypto.randomBytes(32).toString('base64url');
   }
+}
+
+// refresh tokens stored before auth_time was kept have neither, and their id_tokens omit both claims
+function authContextOf({ authTime, amr }: RefreshToken): Partial<AuthContext> {
+  return {
+    authTime: authTime ? Math.floor(authTime.getTime() / 1000) : undefined,
+    amr: amr.length ? amr : undefined,
+  };
 }

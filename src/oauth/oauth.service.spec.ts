@@ -1,6 +1,7 @@
 import { CacheNotFoundException } from '@lib/redis';
 import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { Client, RefreshToken, User } from '@prisma/client';
+import { AuthContext } from 'src/auth/types/authContext.type';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 
@@ -105,6 +106,8 @@ function storedRefreshToken(
     scopes: ['offline_access', 'name'],
     familyId: 'family-1',
     usedAt: null,
+    authTime: null,
+    amr: [],
     clientUuid: 'client-1',
     userUuid: 'user-1',
     ...overrides,
@@ -134,8 +137,14 @@ function authorizeRequest(
   };
 }
 
-async function authorize(service: OauthService, scope: ScopeType[] = ['name']) {
-  const url = new URL(await service.authorize(authorizeRequest(scope), user));
+async function authorize(
+  service: OauthService,
+  scope: ScopeType[] = ['name'],
+  auth?: AuthContext,
+) {
+  const url = new URL(
+    await service.authorize(authorizeRequest(scope), user, auth),
+  );
   return { url, code: url.searchParams.get('code')! };
 }
 
@@ -421,11 +430,71 @@ describe('OauthService', () => {
         codeVerifier: VERIFIER,
       });
       expect(oauthRepository.createRefreshToken).toHaveBeenCalledWith(
-        expect.any(String),
+        expect.objectContaining({
+          scopes: ['openid', 'offline_access', 'name'],
+          userUuid: 'user-1',
+          clientUuid: 'client-1',
+          nonce: 'n-1',
+        }),
+      );
+    });
+  });
+
+  describe('auth_time and amr', () => {
+    const auth = { authTime: 1_700_000_000, amr: ['hwk', 'user'] };
+
+    it('puts how the user signed in to the IdP into the id_token and the refresh token', async () => {
+      const { service, oauthRepository, jwtService } = setup();
+      const { code } = await authorize(
+        service,
         ['openid', 'offline_access', 'name'],
-        'user-1',
-        'client-1',
-        'n-1',
+        auth,
+      );
+
+      await service.codeGrant({
+        grantType: 'authorization_code',
+        clientId: 'client-1',
+        code,
+        codeVerifier: VERIFIER,
+      });
+      expect(jwtService.sign).toHaveBeenCalledWith(
+        expect.objectContaining({ auth_time: 1_700_000_000, amr: auth.amr }),
+      );
+      expect(oauthRepository.createRefreshToken).toHaveBeenCalledWith(
+        expect.objectContaining(auth),
+      );
+    });
+
+    it('keeps them when the refresh token grant issues a new id_token', async () => {
+      const { service, oauthRepository, jwtService } = setup();
+      oauthRepository.findRefreshTokenByToken.mockImplementation(() =>
+        Promise.resolve(
+          storedRefreshToken({
+            scopes: ['openid', 'offline_access'],
+            authTime: new Date(1_700_000_000_000),
+            amr: ['pwd'],
+          }),
+        ),
+      );
+
+      await service.refreshTokenGrant(refreshRequest);
+      expect(jwtService.sign).toHaveBeenCalledWith(
+        expect.objectContaining({ auth_time: 1_700_000_000, amr: ['pwd'] }),
+      );
+      expect(oauthRepository.createRefreshToken).toHaveBeenCalledWith(
+        expect.objectContaining({ authTime: 1_700_000_000, amr: ['pwd'] }),
+      );
+    });
+
+    it('omits them for a session from before they were recorded', async () => {
+      const { service, oauthRepository, jwtService } = setup();
+      oauthRepository.findRefreshTokenByToken.mockImplementation(() =>
+        Promise.resolve(storedRefreshToken({ scopes: ['openid'] })),
+      );
+
+      await service.refreshTokenGrant(refreshRequest);
+      expect(jwtService.sign).toHaveBeenCalledWith(
+        expect.objectContaining({ auth_time: undefined, amr: undefined }),
       );
     });
   });
@@ -488,12 +557,15 @@ describe('OauthService', () => {
 
       expect(oauthRepository.markRefreshTokenUsed).toHaveBeenCalledWith('rt-1');
       expect(oauthRepository.createRefreshToken).toHaveBeenCalledWith(
-        expect.any(String),
-        ['offline_access', 'name'],
-        'user-1',
-        'client-1',
-        undefined,
-        'family-1',
+        expect.objectContaining({
+          scopes: ['offline_access', 'name'],
+          userUuid: 'user-1',
+          clientUuid: 'client-1',
+          nonce: null,
+          familyId: 'family-1',
+          authTime: undefined,
+          amr: undefined,
+        }),
       );
       expect(oauthRepository.deleteRefreshTokenByToken).not.toHaveBeenCalled();
       expect(oauthRepository.deleteRefreshTokenFamily).not.toHaveBeenCalled();

@@ -31,8 +31,10 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { User } from '@prisma/client';
+import { GetAuthContext } from 'src/auth/decorator/getAuthContext.decorator';
 import { GetUser } from 'src/auth/decorator/getUser.decorator';
 import { UserGuard } from 'src/auth/guard/auth.guard';
+import { AuthContext } from 'src/auth/types/authContext.type';
 
 import {
   AuthorizationReqDto,
@@ -104,9 +106,10 @@ export class OauthController {
   async authorize(
     @Query() query: AuthorizationReqDto,
     @GetUser() user: User,
+    @GetAuthContext() auth: AuthContext | undefined,
   ): Promise<HttpRedirectResponse> {
     return {
-      url: await this.oauthService.authorize(query, user),
+      url: await this.oauthService.authorize(query, user, auth),
       statusCode: 302,
     };
   }

@@ -53,6 +53,7 @@ export class WellKnownService {
         'iat',
         'iss',
         'auth_time',
+        'amr',
         'nonce',
         ...ClientScopeList,
       ],
