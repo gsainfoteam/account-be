@@ -74,7 +74,14 @@ function setup(registered: Client = client()) {
   };
   const userService = {
     findUserByUuid: jest.fn(() =>
-      Promise.resolve({ uuid: 'user-1', name: '홍길동' }),
+      Promise.resolve({
+        uuid: 'user-1',
+        name: '홍길동',
+        studentId: '20231234',
+        isIdVerified: true,
+        phoneNumber: '010-0000-0000',
+        isPhoneNumberVerified: false,
+      }),
     ),
   };
   const configService = {
@@ -435,6 +442,37 @@ describe('OauthService', () => {
           userUuid: 'user-1',
           clientUuid: 'client-1',
           nonce: 'n-1',
+        }),
+      );
+    });
+  });
+
+  describe('id_token claims', () => {
+    it('carries the verification flags with the student id and phone number, as userinfo does', async () => {
+      const { service, oauthRepository, jwtService } = setup(
+        client({ scopes: ['student_id', 'phone_number'] }),
+      );
+      oauthRepository.findConsent.mockImplementation(() =>
+        Promise.resolve({ scopes: ['student_id', 'phone_number'] }),
+      );
+      const { code } = await authorize(service, [
+        'openid',
+        'student_id',
+        'phone_number',
+      ]);
+
+      await service.codeGrant({
+        grantType: 'authorization_code',
+        clientId: 'client-1',
+        code,
+        codeVerifier: VERIFIER,
+      });
+      expect(jwtService.sign).toHaveBeenCalledWith(
+        expect.objectContaining({
+          student_id: '20231234',
+          is_student_id_verified: true,
+          phone_number: '010-0000-0000',
+          is_phone_number_verified: false,
         }),
       );
     });

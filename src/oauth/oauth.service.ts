@@ -354,8 +354,14 @@ export class OauthService {
         student_id: cache.scope.includes('student_id')
           ? user.studentId
           : undefined,
+        is_student_id_verified: cache.scope.includes('student_id')
+          ? user.isIdVerified
+          : undefined,
         phone_number: cache.scope.includes('phone_number')
           ? user.phoneNumber
+          : undefined,
+        is_phone_number_verified: cache.scope.includes('phone_number')
+          ? user.isPhoneNumberVerified
           : undefined,
       });
     }
@@ -462,8 +468,14 @@ export class OauthService {
         name: scopes.includes('name') ? user.name : undefined,
         email: scopes.includes('email') ? user.email : undefined,
         student_id: scopes.includes('student_id') ? user.studentId : undefined,
+        is_student_id_verified: scopes.includes('student_id')
+          ? user.isIdVerified
+          : undefined,
         phone_number: scopes.includes('phone_number')
           ? user.phoneNumber
+          : undefined,
+        is_phone_number_verified: scopes.includes('phone_number')
+          ? user.isPhoneNumberVerified
           : undefined,
       });
     }
