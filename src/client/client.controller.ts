@@ -94,18 +94,15 @@ export class ClientController {
   @ApiOperation({
     summary: "Get Client's public information",
     description:
-      '모든 유저가 확인할 수 있는 Client의 정보를 알려준다. IdP를 사용하는 유저라고 확인하기 위해서, Jwt토큰을 사용한다. 해당 유저가 소유한 Client를 찾기 위한 것은 아니므로, user의 권한을 확인하지 않는다.',
+      '누구나 확인할 수 있는 Client의 정보를 알려준다. 로그인 전의 RP 도 자기 등록 정보(scope, 인증 방식)를 확인할 수 있도록 인증을 요구하지 않는다.',
   })
-  @ApiBearerAuth('user:jwt')
   @ApiOkResponse({ description: '성공', type: ClientPublicResDto })
-  @ApiUnauthorizedResponse({ description: '인증 실패' })
   @ApiBadRequestResponse({
     description:
       '잘못된 요청, clientId의 타입이 uuid가 아니면 발생할 수 있습니다.',
   })
   @ApiInternalServerErrorResponse({ description: '서버 오류' })
   @Get(':clientId/public')
-  @UseGuards(UserGuard)
   async getClientPublic(
     @Param('clientId', ParseUUIDPipe) uuid: string,
   ): Promise<ClientPublicResDto> {

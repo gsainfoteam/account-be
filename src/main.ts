@@ -38,6 +38,7 @@ async function bootstrap() {
     '/oauth/certs',
     '/oauth/userinfo',
     '/.well-known/openid-configuration',
+    '/public', // a client's public registration, read by service frontends through the SDK
   ];
   app.enableCors({
     delegator: (req, callback) => {
