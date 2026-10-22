@@ -220,6 +220,31 @@ describe('OauthService', () => {
     });
   });
 
+  describe('logoutRedirect', () => {
+    it('returns to a registered post-logout URI with state', async () => {
+      const { service } = setup();
+
+      await expect(
+        service.logoutRedirect({
+          clientId: 'client-1',
+          postLogoutRedirectUri: 'https://app.example/callback?from=login',
+          state: 'a b&c',
+        }),
+      ).resolves.toBe('https://app.example/callback?from=login&state=a+b%26c');
+    });
+
+    it('refuses a post-logout URI the client did not register', async () => {
+      const { service } = setup();
+
+      await expect(
+        service.logoutRedirect({
+          clientId: 'client-1',
+          postLogoutRedirectUri: 'https://evil.example/callback',
+        }),
+      ).resolves.toBeNull();
+    });
+  });
+
   describe('PKCE', () => {
     it('rejects a verifier that does not hash to the challenge', async () => {
       const { service } = setup();

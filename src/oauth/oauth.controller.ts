@@ -38,6 +38,7 @@ import {
   AuthorizationReqDto,
   AuthorizeErrorReqDto,
   ConsentReqDto,
+  LogoutRedirectReqDto,
   RevokeReqDto,
   TokenReqDto,
 } from './dto/req.dto';
@@ -124,6 +125,25 @@ export class OauthController {
     @Query() query: AuthorizeErrorReqDto,
   ): Promise<HttpRedirectResponse> {
     const url = await this.oauthService.authorizeErrorRedirect(query);
+    if (!url) throw new BadRequestException(UNTRUSTED_REDIRECT);
+
+    return { url, statusCode: 302 };
+  }
+
+  @ApiOperation({
+    summary: 'return to the client after logout',
+    description:
+      'account-fe sends the user here after it ended the IdP session for an RP-Initiated Logout request. the user is redirected to post_logout_redirect_uri only when it is registered for the client.',
+  })
+  @ApiBadRequestResponse({
+    description: 'unknown client_id or unregistered post_logout_redirect_uri',
+  })
+  @Redirect()
+  @Get('logout/redirect')
+  async logoutRedirect(
+    @Query() query: LogoutRedirectReqDto,
+  ): Promise<HttpRedirectResponse> {
+    const url = await this.oauthService.logoutRedirect(query);
     if (!url) throw new BadRequestException(UNTRUSTED_REDIRECT);
 
     return { url, statusCode: 302 };

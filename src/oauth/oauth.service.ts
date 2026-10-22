@@ -195,14 +195,9 @@ export class OauthService {
     error: AuthorizeError;
     errorDescription?: string;
   }): Promise<string | null> {
-    if (!clientId || !redirectUri) return null;
+    const url = await this.registeredRedirect(clientId, redirectUri);
+    if (!url) return null;
 
-    const client = await this.clientService
-      .getClientByUuid(clientId)
-      .catch(() => null);
-    if (!client?.urls.includes(redirectUri)) return null;
-
-    const url = new URL(redirectUri);
     url.searchParams.set('error', error);
     if (errorDescription) {
       url.searchParams.set('error_description', errorDescription);
@@ -214,6 +209,42 @@ export class OauthService {
     if (state) url.searchParams.set('state', state);
 
     return url.toString();
+  }
+
+  /**
+   * build the redirect back to the client after account-fe ended the IdP session, as OIDC RP-Initiated Logout describes
+   * @param param0 the client, where it asked to return after logout, and its state
+   * @returns the redirect url, or null when client_id or post_logout_redirect_uri cannot be trusted
+   */
+  async logoutRedirect({
+    clientId,
+    postLogoutRedirectUri,
+    state,
+  }: {
+    clientId: string;
+    postLogoutRedirectUri: string;
+    state?: string;
+  }): Promise<string | null> {
+    const url = await this.registeredRedirect(clientId, postLogoutRedirectUri);
+    if (!url) return null;
+
+    if (state) url.searchParams.set('state', state);
+
+    return url.toString();
+  }
+
+  private async registeredRedirect(
+    clientId: string | null,
+    redirectUri: string | null,
+  ): Promise<URL | null> {
+    if (!clientId || !redirectUri) return null;
+
+    const client = await this.clientService
+      .getClientByUuid(clientId)
+      .catch(() => null);
+    if (!client?.urls.includes(redirectUri)) return null;
+
+    return new URL(redirectUri);
   }
 
   /**

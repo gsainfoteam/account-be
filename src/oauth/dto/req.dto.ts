@@ -316,3 +316,20 @@ export class AuthorizeErrorReqDto {
   @IsOptional()
   errorDescription?: (typeof DenialReasonList)[number];
 }
+
+export class LogoutRedirectReqDto {
+  @ApiProperty({ name: 'client_id' })
+  @Expose({ name: 'client_id' })
+  @IsString()
+  clientId: string;
+
+  @ApiProperty({ name: 'post_logout_redirect_uri' })
+  @Expose({ name: 'post_logout_redirect_uri' })
+  @IsString()
+  postLogoutRedirectUri: string;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  state?: string;
+}
