@@ -503,7 +503,10 @@ export class OauthService {
 
     const stored = await this.oauthRepository
       .findRefreshTokenByToken(token)
-      .catch(() => null);
+      .catch((error) => {
+        if (error instanceof OauthTokenException) return null;
+        throw error;
+      });
     if (stored?.clientUuid !== clientId) return false;
 
     await this.oauthRepository.deleteRefreshTokenFamily(stored.familyId);

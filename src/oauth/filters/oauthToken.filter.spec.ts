@@ -1,9 +1,9 @@
-import { ArgumentsHost } from '@nestjs/common';
+import { ArgumentsHost, BadRequestException } from '@nestjs/common';
 
 import { OauthTokenException } from '../exceptions/oauth.token.exception';
 import { OauthTokenExceptionFilter } from './oauthToken.filter';
 
-function run(error: OauthTokenException, authorization?: string) {
+function run(error: BadRequestException, authorization?: string) {
   const headers: Record<string, string> = {};
   const sent: { status?: number; body?: unknown } = {};
   const reply = {
@@ -57,5 +57,17 @@ describe('OauthTokenExceptionFilter', () => {
     expect(result.status).toBe(400);
     expect(result.headers['Cache-Control']).toBe('no-store');
     expect(result.headers['Pragma']).toBe('no-cache');
+  });
+
+  it('answers a request the validation pipe rejected with invalid_request', () => {
+    const result = run(
+      new BadRequestException([
+        'grant_type must be one of the following values',
+      ]),
+    );
+
+    expect(result.status).toBe(400);
+    expect(result.body).toEqual({ error: 'invalid_request' });
+    expect(result.headers['Cache-Control']).toBe('no-store');
   });
 });
