@@ -413,9 +413,7 @@ export class OauthService {
     scope,
   }: ClientCredentialsGrantContentType): Promise<TokenResDto> {
     const client = await this.findClient(clientId);
-    if (client.tokenEndpointAuthMethod === 'none') {
-      throw new OauthTokenException('unauthorized_client');
-    }
+    // clients registered before tokenEndpointAuthMethod are none but already call this grant with their secret (pot-g-be)
     this.verifySecret(client, clientSecret);
 
     scope.forEach((s) => {

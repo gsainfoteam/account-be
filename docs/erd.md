@@ -1,6 +1,14 @@
 ```mermaid
 erDiagram
 
+        TokenEndpointAuthMethod {
+            none none
+client_secret_post client_secret_post
+client_secret_basic client_secret_basic
+        }
+    
+
+
         RoleType {
             OWNER OWNER
 ADMIN ADMIN
@@ -33,6 +41,7 @@ MEMBER MEMBER
     DateTime updatedAt 
     DateTime delete_requested_at "❓"
     Boolean idTokenAllowed 
+    TokenEndpointAuthMethod token_endpoint_auth_method 
     String scopes 
     String optional_scopes 
     }
@@ -49,6 +58,10 @@ MEMBER MEMBER
     DateTime expiresAt 
     String nonce "❓"
     String scopes 
+    String familyId 
+    DateTime usedAt "❓"
+    DateTime authTime "❓"
+    String amr 
     }
   
 
@@ -74,6 +87,7 @@ MEMBER MEMBER
     "user" o{--}o "consent" : "consent"
     "user" o{--}o "refresh_token" : "RefreshToken"
     "user" o{--}o "authenticator" : "authenticators"
+    "client" o|--|| "TokenEndpointAuthMethod" : "enum:token_endpoint_auth_method"
     "client" o{--}o "user_client_relations" : "userLinks"
     "client" o{--}o "consent" : "consent"
     "client" o{--}o "refresh_token" : "RefreshToken"

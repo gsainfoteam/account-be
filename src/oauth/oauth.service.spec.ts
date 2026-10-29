@@ -303,12 +303,15 @@ describe('OauthService', () => {
       scope: ['name' as const],
     });
 
-    it('refuses a public client with unauthorized_client', async () => {
+    it('keeps issuing to a client registered before the auth method existed', async () => {
       const { service } = setup();
 
       await expect(
-        errorOf(service.clientCredentialsGrant(grant(SECRET))),
-      ).resolves.toEqual({ error: 'unauthorized_client' });
+        service.clientCredentialsGrant(grant(SECRET)),
+      ).resolves.toMatchObject({ tokenType: 'Bearer' });
+      await expect(
+        errorOf(service.clientCredentialsGrant(grant('wrong'))),
+      ).resolves.toEqual({ error: 'invalid_client' });
     });
 
     it('answers a missing secret with invalid_client instead of crashing', async () => {
