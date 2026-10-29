@@ -1,9 +1,9 @@
 import { CacheNotFoundException } from '@lib/redis';
 import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { Client, RefreshToken, User } from '@prisma/client';
-import { AuthContext } from 'src/auth/types/authContext.type';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
+import { AuthContext } from 'src/auth/types/authContext.type';
 
 import { AuthorizationReqDto } from './dto/req.dto';
 import { OauthTokenException } from './exceptions/oauth.token.exception';
@@ -65,9 +65,10 @@ function setup(registered: Client = client()) {
         Promise.reject(new OauthTokenException('invalid_grant')),
     ),
     deleteRefreshTokenByToken: jest.fn(() => Promise.resolve()),
-    markRefreshTokenUsed: jest.fn(() => Promise.resolve(true)),
+    rotateRefreshToken: jest.fn<Promise<boolean>, [string, string, unknown?]>(
+      () => Promise.resolve(true),
+    ),
     deleteRefreshTokenFamily: jest.fn(() => Promise.resolve()),
-    pruneRefreshTokenFamily: jest.fn(() => Promise.resolve()),
   };
   const clientService = {
     getClientByUuid: jest.fn(() => Promise.resolve(registered)),
@@ -519,7 +520,9 @@ describe('OauthService', () => {
       expect(jwtService.sign).toHaveBeenCalledWith(
         expect.objectContaining({ auth_time: 1_700_000_000, amr: ['pwd'] }),
       );
-      expect(oauthRepository.createRefreshToken).toHaveBeenCalledWith(
+      expect(oauthRepository.rotateRefreshToken).toHaveBeenCalledWith(
+        'rt-1',
+        'family-1',
         expect.objectContaining({ authTime: 1_700_000_000, amr: ['pwd'] }),
       );
     });
@@ -584,7 +587,7 @@ describe('OauthService', () => {
   });
 
   describe('refresh token rotation', () => {
-    it('keeps the rotated token as used and continues its family', async () => {
+    it('rotates the token and continues its family', async () => {
       const { service, oauthRepository } = setup();
       oauthRepository.findRefreshTokenByToken.mockImplementation(() =>
         Promise.resolve(storedRefreshToken()),
@@ -593,9 +596,11 @@ describe('OauthService', () => {
       const { refreshToken } = await service.refreshTokenGrant(refreshRequest);
       expect(typeof refreshToken).toBe('string');
 
-      expect(oauthRepository.markRefreshTokenUsed).toHaveBeenCalledWith('rt-1');
-      expect(oauthRepository.createRefreshToken).toHaveBeenCalledWith(
+      expect(oauthRepository.rotateRefreshToken).toHaveBeenCalledWith(
+        'rt-1',
+        'family-1',
         expect.objectContaining({
+          token: refreshToken,
           scopes: ['offline_access', 'name'],
           userUuid: 'user-1',
           clientUuid: 'client-1',
@@ -606,41 +611,21 @@ describe('OauthService', () => {
         }),
       );
       expect(oauthRepository.deleteRefreshTokenByToken).not.toHaveBeenCalled();
-      expect(oauthRepository.deleteRefreshTokenFamily).not.toHaveBeenCalled();
     });
 
-    it('ends the whole family when a rotated token comes back', async () => {
+    it('issues nothing when the token was already used', async () => {
       const { service, oauthRepository, redis } = setup();
       oauthRepository.findRefreshTokenByToken.mockImplementation(() =>
         Promise.resolve(storedRefreshToken({ usedAt: new Date() })),
       );
-
-      await expect(
-        errorOf(service.refreshTokenGrant(refreshRequest)),
-      ).resolves.toEqual({ error: 'invalid_grant' });
-
-      expect(oauthRepository.deleteRefreshTokenFamily).toHaveBeenCalledWith(
-        'family-1',
-      );
-      expect(oauthRepository.createRefreshToken).not.toHaveBeenCalled();
-      expect(redis.size).toBe(0);
-    });
-
-    it('treats losing a race for the same token as reuse', async () => {
-      const { service, oauthRepository } = setup();
-      oauthRepository.findRefreshTokenByToken.mockImplementation(() =>
-        Promise.resolve(storedRefreshToken()),
-      );
-      oauthRepository.markRefreshTokenUsed.mockImplementation(() =>
+      oauthRepository.rotateRefreshToken.mockImplementation(() =>
         Promise.resolve(false),
       );
 
       await expect(
         errorOf(service.refreshTokenGrant(refreshRequest)),
       ).resolves.toEqual({ error: 'invalid_grant' });
-      expect(oauthRepository.deleteRefreshTokenFamily).toHaveBeenCalledWith(
-        'family-1',
-      );
+      expect(redis.size).toBe(0);
     });
 
     it('revokes the whole family when a refresh token is revoked', async () => {

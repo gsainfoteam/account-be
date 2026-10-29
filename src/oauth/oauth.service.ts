@@ -404,22 +404,27 @@ export class OauthService {
       throw new OauthTokenException('invalid_grant');
     }
 
-    // a rotated refresh token coming back means it leaked, so the whole grant ends (OAuth 2.1 section 4.3.1)
-    const rotated =
-      !refreshTokenData.usedAt &&
-      (await this.oauthRepository.markRefreshTokenUsed(refreshToken));
-    if (!rotated) {
-      await this.oauthRepository.deleteRefreshTokenFamily(
-        refreshTokenData.familyId,
-      );
-      throw new OauthTokenException('invalid_grant');
-    }
-    await this.oauthRepository.pruneRefreshTokenFamily(
-      refreshTokenData.familyId,
-    );
-
     const scopes = refreshTokenData.scopes.filter(isScope);
     const auth = authContextOf(refreshTokenData);
+    const newRefreshToken = scopes.includes('offline_access')
+      ? this.generateOpaqueToken()
+      : undefined;
+    const rotated = await this.oauthRepository.rotateRefreshToken(
+      refreshToken,
+      refreshTokenData.familyId,
+      newRefreshToken === undefined
+        ? undefined
+        : {
+            token: newRefreshToken,
+            scopes,
+            userUuid: refreshTokenData.userUuid,
+            clientUuid: refreshTokenData.clientUuid,
+            nonce: refreshTokenData.nonce,
+            familyId: refreshTokenData.familyId,
+            ...auth,
+          },
+    );
+    if (!rotated) throw new OauthTokenException('invalid_grant');
 
     const accessToken = this.generateOpaqueToken();
     await this.redisService.set<TokenCacheType>(
@@ -435,20 +440,6 @@ export class OauthService {
         ttl: 3 * 60 * 60, // 3 hours
       },
     );
-
-    let newRefreshToken = undefined;
-    if (scopes.includes('offline_access')) {
-      newRefreshToken = this.generateOpaqueToken();
-      await this.oauthRepository.createRefreshToken({
-        token: newRefreshToken,
-        scopes,
-        userUuid: refreshTokenData.userUuid,
-        clientUuid: refreshTokenData.clientUuid,
-        nonce: refreshTokenData.nonce,
-        familyId: refreshTokenData.familyId,
-        ...auth,
-      });
-    }
 
     let idToken = undefined;
     if (scopes.includes('openid')) {
