@@ -60,8 +60,6 @@ MEMBER MEMBER
     String scopes 
     String familyId 
     DateTime usedAt "❓"
-    DateTime authTime "❓"
-    String amr 
     }
   
 
