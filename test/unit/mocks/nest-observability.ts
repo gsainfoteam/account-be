@@ -5,6 +5,10 @@ export const Trace = () => (): void => undefined;
 
 export const OtelClassSerializerInterceptor = ClassSerializerInterceptor;
 
-export class PrismaMetricsService {}
+export class PrismaMetricsService {
+  getMetricsMiddleware() {
+    return (): void => undefined;
+  }
+}
 
 export const initializeOpenTelemetry = (): void => undefined;

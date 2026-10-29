@@ -19,18 +19,20 @@ const token = (value: string) => ({
 });
 const familySize = () => prisma.refreshToken.count({ where: { familyId } });
 
-// holds the family lock and inserts a token, as a rotation does, while `remove` runs
+// holds the family lock and inserts a token, as a rotation does, then starts `remove` before committing.
+// an unlocked remove finishes before the commit; a locked one waits for it, so the timeout only keeps it moving
 async function removeDuringRotation(remove: () => Promise<unknown>) {
   await repository.createRefreshToken(token('presented'));
-  const rotation = prisma.$transaction(async (tx) => {
+  let removal: Promise<unknown> = Promise.resolve();
+  await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${familyId}))`;
     await tx.refreshToken.create({
       data: { ...token('next'), expiresAt: new Date(Date.now() + 60_000) },
     });
-    await sleep(400);
+    removal = remove();
+    await Promise.race([removal, sleep(300)]);
   });
-  await sleep(100);
-  await Promise.all([rotation, remove()]);
+  await removal;
   return familySize();
 }
 
