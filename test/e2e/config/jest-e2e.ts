@@ -27,6 +27,8 @@ const config: Config.InitialOptions = {
     '^@lib/prisma/(.*)$': '<rootDir>/libs/prisma/src/$1',
     '^@lib/redis(|/.*)$': '<rootDir>/libs/redis/src/$1',
     '^src/(.*)$': '<rootDir>/src/$1',
+    '^@gsainfoteam/nest-observability$':
+      '<rootDir>/test/unit/mocks/nest-observability.ts',
   },
   globalSetup: '<rootDir>/test/e2e/config/setup/global-setup.ts',
   globalTeardown: '<rootDir>/test/e2e/config/setup/global-teardown.ts',
