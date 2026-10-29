@@ -31,7 +31,7 @@ export class OauthRepository {
         if (error instanceof PrismaClientKnownRequestError) {
           if (error.code === 'P2025') {
             this.logger.debug(`Refresh token not found: ${token}`);
-            throw new OauthTokenException('invalid_request');
+            throw new OauthTokenException('invalid_grant');
           }
           this.logger.error('database error', error);
         }
@@ -51,6 +51,7 @@ export class OauthRepository {
     userUuid: string,
     clientUuid: string,
     nonce?: string,
+    familyId?: string,
   ): Promise<RefreshToken> {
     return this.prismaService.refreshToken.create({
       data: {
@@ -59,8 +60,40 @@ export class OauthRepository {
         clientUuid,
         scopes,
         nonce,
+        familyId,
         expiresAt: new Date(Date.now() + MAX_REFRESH_TOKEN_AGE * 1000),
       },
+    });
+  }
+
+  /**
+   * mark the refresh token as rotated, unless another request already did
+   * @param token the refresh token being rotated
+   * @returns whether this call marked it, so two requests racing with the same token cannot both win
+   */
+  async markRefreshTokenUsed(token: string): Promise<boolean> {
+    const { count } = await this.prismaService.refreshToken.updateMany({
+      where: { token, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+    return count === 1;
+  }
+
+  /**
+   * delete every refresh token of the family, ending the authorization they came from
+   * @param familyId the family to delete
+   */
+  async deleteRefreshTokenFamily(familyId: string): Promise<void> {
+    await this.prismaService.refreshToken.deleteMany({ where: { familyId } });
+  }
+
+  /**
+   * delete the expired tokens of the family. rotated tokens are kept until they expire to catch reuse
+   * @param familyId the family to prune
+   */
+  async pruneRefreshTokenFamily(familyId: string): Promise<void> {
+    await this.prismaService.refreshToken.deleteMany({
+      where: { familyId, expiresAt: { lt: new Date() } },
     });
   }
 
@@ -75,7 +108,7 @@ export class OauthRepository {
         if (error instanceof PrismaClientKnownRequestError) {
           if (error.code === 'P2025') {
             this.logger.debug(`Refresh token not found: ${token}`);
-            throw new OauthTokenException('invalid_request');
+            throw new OauthTokenException('invalid_grant');
           }
           this.logger.error('database error', error);
         }

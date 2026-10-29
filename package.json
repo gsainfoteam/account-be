@@ -20,7 +20,8 @@
     "test:e2e": "jest --config test/e2e/config/jest-e2e.ts",
     "doc": "bun ./patch-compodoc.js && compodoc -p tsconfig.json -a assets -d ./doc",
     "doc:serve": "bun ./patch-compodoc.js && compodoc -p tsconfig.json -a assets -d ./doc -s",
-    "email": "email dev --dir libs/templates/src/templates"
+    "email": "email dev --dir libs/templates/src/templates",
+    "test:unit": "jest --config test/unit/config/jest-unit.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.750.0",

@@ -1,10 +1,10 @@
 import { OtelClassSerializerInterceptor } from '@gsainfoteam/nest-observability';
 import {
-  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
+  Header,
   Headers,
   HttpCode,
   HttpRedirectResponse,
@@ -13,6 +13,8 @@ import {
   Query,
   Redirect,
   SerializeOptions,
+  UnauthorizedException,
+  UseFilters,
   UseGuards,
   UseInterceptors,
   UsePipes,
@@ -38,6 +40,8 @@ import {
   TokenReqDto,
 } from './dto/req.dto';
 import { TokenResDto, UserInfoResDto } from './dto/res.dto';
+import { OauthAuthorizeExceptionFilter } from './filters/oauthAuthorize.filter';
+import { OauthTokenExceptionFilter } from './filters/oauthToken.filter';
 import { BasicAuthGuard } from './guards/basicAuth.guard';
 import { OauthService } from './oauth.service';
 import { GrantContentType } from './types/grant.type';
@@ -90,6 +94,7 @@ export class OauthController {
   @Redirect()
   @Get('authorize')
   @UseGuards(UserGuard)
+  @UseFilters(OauthAuthorizeExceptionFilter)
   async authorize(
     @Query() query: AuthorizationReqDto,
     @GetUser() user: User,
@@ -108,19 +113,39 @@ export class OauthController {
   @ApiConsumes('application/x-www-form-urlencoded', 'application/json')
   @ApiBadRequestResponse({ description: 'invalid request' })
   @UseGuards(BasicAuthGuard)
+  @UseFilters(OauthTokenExceptionFilter)
   @Post('token')
   @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'no-store')
+  @Header('Pragma', 'no-cache')
   @SerializeOptions({ type: TokenResDto })
   token(@Body() body: TokenReqDto): Promise<TokenResDto> {
     return this.oauthService.token(body as GrantContentType);
   }
 
   @ApiOperation({
-    summary: 'revoke the token',
+    summary: 'revoke the token (deprecated)',
     description:
-      'revoke the token from the client. through this endpoint, the client can revoke the token.',
+      'use POST /oauth/revoke instead. kept with its original behavior so existing callers keep working until they move to the RFC 7009 endpoint.',
+    deprecated: true,
   })
   @Delete('token')
+  @Header('Deprecation', '@1791558000')
+  @Header('Link', '</oauth/revoke>; rel="successor-version"')
+  async revokeDeprecated(@Body() body: RevokeReqDto): Promise<void> {
+    return this.oauthService.revokeDeprecated(body);
+  }
+
+  @ApiOperation({
+    summary: 'revoke a token (RFC 7009)',
+    description:
+      'revoke an access or refresh token issued to the client. responds with 200 even for unknown tokens.',
+  })
+  @ApiConsumes('application/x-www-form-urlencoded', 'application/json')
+  @UseGuards(BasicAuthGuard)
+  @UseFilters(OauthTokenExceptionFilter)
+  @Post('revoke')
+  @HttpCode(HttpStatus.OK)
   async revoke(@Body() body: RevokeReqDto): Promise<void> {
     return this.oauthService.revoke(body);
   }
@@ -133,12 +158,12 @@ export class OauthController {
   @Get('userinfo')
   @SerializeOptions({ type: UserInfoResDto })
   async userinfo(
-    @Headers('Authorization') authorizationHeader: string,
+    @Headers('Authorization') authorizationHeader: string | undefined,
     @Query('sub') sub?: string,
   ): Promise<UserInfoResDto> {
-    const [type, token] = authorizationHeader.split(' ');
-    if (type !== 'Bearer') {
-      throw new BadRequestException('invalid token type');
+    const [type, token] = (authorizationHeader ?? '').split(' ');
+    if (type !== 'Bearer' || !token) {
+      throw new UnauthorizedException();
     }
     return this.oauthService.userinfo(token, sub);
   }

@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { RoleType } from '@prisma/client';
+import { RoleType, TokenEndpointAuthMethod } from '@prisma/client';
 import {
   IsArray,
   IsBoolean,
@@ -93,6 +93,16 @@ export class UpdateClientDto {
   @IsBoolean()
   @IsOptional()
   idTokenAllowed?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'how the client authenticates at the token endpoint. "none" for public clients such as browsers and apps',
+    enum: TokenEndpointAuthMethod,
+    example: TokenEndpointAuthMethod.client_secret_post,
+  })
+  @IsEnum(TokenEndpointAuthMethod)
+  @IsOptional()
+  tokenEndpointAuthMethod?: TokenEndpointAuthMethod;
 }
 
 export class MemberEmailDto {

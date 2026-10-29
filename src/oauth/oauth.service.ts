@@ -1,6 +1,6 @@
 import { Trace } from '@gsainfoteam/nest-observability';
 import { Loggable } from '@lib/logger';
-import { RedisService } from '@lib/redis';
+import { CacheNotFoundException, RedisService } from '@lib/redis';
 import {
   BadRequestException,
   Injectable,
@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { User } from '@prisma/client';
+import { Client, User } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { ClientService } from 'src/client/client.service';
@@ -30,7 +30,7 @@ import {
   GrantContentType,
   RefreshTokenGrantContentType,
 } from './types/grant.type';
-import { TokenScopeList } from './types/scope.type';
+import { isScope, isTokenScope } from './types/scope.type';
 import { TokenCacheType } from './types/tokenCache.type';
 
 @Loggable()
@@ -91,7 +91,7 @@ export class OauthService {
       }
     });
     client.scopes.forEach((s) => {
-      if (!scope.includes(s)) {
+      if (!isScope(s) || !scope.includes(s)) {
         throw new OauthAuthorizeException('invalid_scope');
       }
     });
@@ -117,24 +117,31 @@ export class OauthService {
     }: AuthorizationReqDto,
     user: User,
   ): Promise<string> {
-    // recommend: integrate the query below two lines.
+    // client_id and redirect_uri come first: until both are trusted, errors must not be redirected
     const client = await this.clientService
       .getClientByUuid(clientId)
       .catch(() => {
-        throw new OauthAuthorizeException('unauthorized_client');
+        throw new OauthAuthorizeException('invalid_request');
       });
-    const consent = await this.oauthRepository.findConsent(user.uuid, clientId);
+    if (!client.urls.includes(redirectUri)) {
+      throw new OauthAuthorizeException('invalid_request');
+    }
+
+    const consent = await this.oauthRepository
+      .findConsent(user.uuid, clientId)
+      .catch((error: unknown) => {
+        if (error instanceof OauthTokenException) {
+          throw new OauthAuthorizeException('access_denied');
+        }
+        throw error;
+      });
 
     // check if the client has the scope
     scope.forEach((s) => {
-      if (!consent.scopes.includes(s) && !TokenScopeList.includes(s)) {
+      if (!consent.scopes.includes(s) && !isTokenScope(s)) {
         throw new OauthAuthorizeException('invalid_scope');
       }
     });
-    // check if the redirect_uri is in the client's urls
-    if (!client.urls.includes(redirectUri)) {
-      throw new OauthAuthorizeException('access_denied');
-    }
     // check if the id token is supported
     if (scope.includes('openid')) {
       if (!client.idTokenAllowed) {
@@ -163,10 +170,15 @@ export class OauthService {
       },
     );
 
-    return (
-      `${redirectUri}?code=${code}&iss=${this.configService.getOrThrow<string>('JWT_ISSUER')}` +
-      (state ? `&state=${state}` : '')
+    const url = new URL(redirectUri);
+    url.searchParams.set('code', code);
+    url.searchParams.set(
+      'iss',
+      this.configService.getOrThrow<string>('JWT_ISSUER'),
     );
+    if (state) url.searchParams.set('state', state);
+
+    return url.toString();
   }
 
   /**
@@ -194,9 +206,12 @@ export class OauthService {
    */
   async codeGrant({
     clientId,
+    clientSecret,
     code,
     codeVerifier,
   }: CodeGrantContentType): Promise<TokenResDto> {
+    await this.authenticateClient(clientId, clientSecret);
+
     const cache = await this.redisService
       .getOrThrow<AuthorizeCacheType>(code, {
         prefix: this.CodePrefix,
@@ -211,20 +226,14 @@ export class OauthService {
     });
 
     if (cache.clientId !== clientId) {
-      throw new OauthTokenException('invalid_client');
+      throw new OauthTokenException('invalid_grant');
     }
-    if (cache.codeChallengeMethod === 'S256') {
-      const hash = crypto
-        .createHash('sha256')
-        .update(codeVerifier)
-        .digest('base64url');
-      if (hash !== cache.codeChallenge) {
-        throw new OauthTokenException('invalid_grant');
-      }
-    } else if (cache.codeChallengeMethod === 'plain') {
-      if (codeVerifier !== cache.codeChallenge) {
-        throw new OauthTokenException('invalid_grant');
-      }
+    const challenge = crypto
+      .createHash('sha256')
+      .update(codeVerifier)
+      .digest('base64url');
+    if (challenge !== cache.codeChallenge) {
+      throw new OauthTokenException('invalid_grant');
     }
 
     const accessToken = this.generateOpaqueToken();
@@ -250,6 +259,7 @@ export class OauthService {
         cache.scope,
         cache.UserUuid,
         cache.clientId,
+        cache.nonce,
       );
     }
 
@@ -295,8 +305,11 @@ export class OauthService {
    */
   async refreshTokenGrant({
     clientId,
+    clientSecret,
     refreshToken,
   }: RefreshTokenGrantContentType): Promise<TokenResDto> {
+    await this.authenticateClient(clientId, clientSecret);
+
     if (!refreshToken) {
       throw new OauthTokenException('invalid_request');
     }
@@ -312,6 +325,22 @@ export class OauthService {
       throw new OauthTokenException('invalid_grant');
     }
 
+    // a rotated refresh token coming back means it leaked, so the whole grant ends (OAuth 2.1 section 4.3.1)
+    const rotated =
+      !refreshTokenData.usedAt &&
+      (await this.oauthRepository.markRefreshTokenUsed(refreshToken));
+    if (!rotated) {
+      await this.oauthRepository.deleteRefreshTokenFamily(
+        refreshTokenData.familyId,
+      );
+      throw new OauthTokenException('invalid_grant');
+    }
+    await this.oauthRepository.pruneRefreshTokenFamily(
+      refreshTokenData.familyId,
+    );
+
+    const scopes = refreshTokenData.scopes.filter(isScope);
+
     const accessToken = this.generateOpaqueToken();
     await this.redisService.set<TokenCacheType>(
       accessToken,
@@ -319,7 +348,7 @@ export class OauthService {
         to: 'user',
         sub: refreshTokenData.userUuid,
         clientId,
-        scope: refreshTokenData.scopes,
+        scope: scopes,
       },
       {
         prefix: this.TokenPrefix,
@@ -328,21 +357,20 @@ export class OauthService {
     );
 
     let newRefreshToken = undefined;
-    if (refreshTokenData.scopes.includes('offline_access')) {
+    if (scopes.includes('offline_access')) {
       newRefreshToken = this.generateOpaqueToken();
       await this.oauthRepository.createRefreshToken(
         newRefreshToken,
-        refreshTokenData.scopes,
+        scopes,
         refreshTokenData.userUuid,
         refreshTokenData.clientUuid,
+        refreshTokenData.nonce ?? undefined,
+        refreshTokenData.familyId,
       );
     }
 
     let idToken = undefined;
-    if (refreshTokenData.scopes.includes('openid')) {
-      if (!refreshTokenData.nonce) {
-        throw new OauthTokenException('invalid_request');
-      }
+    if (scopes.includes('openid')) {
       const user = await this.userService.findUserByUuid({
         uuid: refreshTokenData.userUuid,
       });
@@ -350,27 +378,18 @@ export class OauthService {
       idToken = this.jwtService.sign({
         sub: refreshTokenData.userUuid,
         aud: refreshTokenData.clientUuid,
-        scope: refreshTokenData.scopes.join(' '),
-        nonce: refreshTokenData.nonce,
-        profile: refreshTokenData.scopes.includes('profile')
-          ? user.profile
-          : undefined,
-        picture: refreshTokenData.scopes.includes('picture')
-          ? user.picture
-          : undefined,
-        name: refreshTokenData.scopes.includes('name') ? user.name : undefined,
-        email: refreshTokenData.scopes.includes('email')
-          ? user.email
-          : undefined,
-        student_id: refreshTokenData.scopes.includes('student_id')
-          ? user.studentId
-          : undefined,
-        phone_number: refreshTokenData.scopes.includes('phone_number')
+        scope: scopes.join(' '),
+        nonce: refreshTokenData.nonce ?? undefined,
+        profile: scopes.includes('profile') ? user.profile : undefined,
+        picture: scopes.includes('picture') ? user.picture : undefined,
+        name: scopes.includes('name') ? user.name : undefined,
+        email: scopes.includes('email') ? user.email : undefined,
+        student_id: scopes.includes('student_id') ? user.studentId : undefined,
+        phone_number: scopes.includes('phone_number')
           ? user.phoneNumber
           : undefined,
       });
     }
-    await this.oauthRepository.deleteRefreshTokenByToken(refreshToken);
 
     return {
       accessToken,
@@ -379,7 +398,7 @@ export class OauthService {
       refreshToken: newRefreshToken,
       refreshTokenExpiresIn: 3 * 30 * 24 * 60 * 60, // 3 months
       idToken,
-      scope: refreshTokenData.scopes,
+      scope: scopes,
     };
   }
 
@@ -393,11 +412,9 @@ export class OauthService {
     clientSecret,
     scope,
   }: ClientCredentialsGrantContentType): Promise<TokenResDto> {
-    const client = await this.clientService.getClientByUuid(clientId);
-
-    if (!bcrypt.compareSync(clientSecret, client.secret)) {
-      throw new OauthTokenException('invalid_client');
-    }
+    const client = await this.findClient(clientId);
+    // clients registered before tokenEndpointAuthMethod are none but already call this grant with their secret (pot-g-be)
+    this.verifySecret(client, clientSecret);
 
     scope.forEach((s) => {
       if (!client.scopes.includes(s) && !client.optionalScopes.includes(s)) {
@@ -428,21 +445,70 @@ export class OauthService {
   }
 
   /**
-   * revoke the token by the token type hint
-   * @param param0 tokens and token type hint
+   * revoke a token issued to the client, as RFC 7009 describes. unknown tokens and tokens of other
+   * clients are ignored, so the response does not reveal whether a token exists.
+   * @param param0 token, token type hint and client credentials
    */
-  async revoke({ token, tokenTypeHint }: RevokeReqDto): Promise<void> {
+  async revoke({
+    token,
+    tokenTypeHint,
+    clientId,
+    clientSecret,
+  }: RevokeReqDto): Promise<void> {
+    const client = await this.authenticateClient(clientId, clientSecret);
+    const order =
+      tokenTypeHint === 'refresh_token'
+        ? (['refresh_token', 'access_token'] as const)
+        : (['access_token', 'refresh_token'] as const);
+
+    for (const type of order) {
+      if (await this.revokeIfIssuedTo(token, type, client)) return;
+    }
+  }
+
+  /**
+   * revoke the token by the token type hint, as DELETE /oauth/token always did.
+   * @deprecated use {@link OauthService.revoke}, which authenticates the client as RFC 7009 requires.
+   * @param param0 token and token type hint
+   */
+  async revokeDeprecated({
+    token,
+    tokenTypeHint,
+  }: RevokeReqDto): Promise<void> {
     if (tokenTypeHint === 'access_token') {
-      await this.redisService.del(token, {
-        prefix: this.TokenPrefix,
-      });
+      await this.redisService.del(token, { prefix: this.TokenPrefix });
     } else if (tokenTypeHint === 'refresh_token') {
       await this.oauthRepository.deleteRefreshTokenByToken(token);
     } else {
-      throw new BadRequestException({
-        error: 'invalid_request',
-      });
+      throw new BadRequestException({ error: 'invalid_request' });
     }
+  }
+
+  private async revokeIfIssuedTo(
+    token: string,
+    type: 'access_token' | 'refresh_token',
+    clientId: string,
+  ): Promise<boolean> {
+    if (type === 'access_token') {
+      const cached = await this.redisService.get<TokenCacheType>(token, {
+        prefix: this.TokenPrefix,
+      });
+      if (cached?.clientId !== clientId) return false;
+
+      await this.redisService.del(token, { prefix: this.TokenPrefix });
+      return true;
+    }
+
+    const stored = await this.oauthRepository
+      .findRefreshTokenByToken(token)
+      .catch((error) => {
+        if (error instanceof OauthTokenException) return null;
+        throw error;
+      });
+    if (stored?.clientUuid !== clientId) return false;
+
+    await this.oauthRepository.deleteRefreshTokenFamily(stored.familyId);
+    return true;
   }
 
   /**
@@ -452,12 +518,16 @@ export class OauthService {
    * @returns the user info
    */
   async userinfo(token: string, userUuid?: string): Promise<UserInfoResDto> {
-    const tokenData = await this.redisService.getOrThrow<TokenCacheType>(
-      token,
-      {
+    const tokenData = await this.redisService
+      .getOrThrow<TokenCacheType>(token, {
         prefix: this.TokenPrefix,
-      },
-    );
+      })
+      .catch((error) => {
+        if (error instanceof CacheNotFoundException) {
+          throw new UnauthorizedException();
+        }
+        throw error;
+      });
 
     let user: User;
     if (tokenData.to === 'client') {
@@ -472,7 +542,7 @@ export class OauthService {
         throw new UnauthorizedException();
       }
       consent.scopes.forEach((v) => {
-        if (!tokenData.scope.includes(v)) {
+        if (!isScope(v) || !tokenData.scope.includes(v)) {
           throw new UnauthorizedException();
         }
       });
@@ -507,6 +577,38 @@ export class OauthService {
         ? user.isPhoneNumberVerified
         : undefined,
     };
+  }
+
+  /**
+   * authenticate the client at the token endpoint. confidential clients must present their secret,
+   * public clients (browsers, apps) cannot keep one and rely on PKCE alone.
+   * @param clientId client id from the body or basic auth
+   * @param clientSecret client secret from the body or basic auth
+   */
+  private async authenticateClient(
+    clientId: string | undefined,
+    clientSecret: string | undefined,
+  ): Promise<string> {
+    const client = await this.findClient(clientId);
+    if (client.tokenEndpointAuthMethod !== 'none') {
+      this.verifySecret(client, clientSecret);
+    }
+    return client.uuid;
+  }
+
+  private async findClient(clientId: string | undefined): Promise<Client> {
+    if (!clientId) {
+      throw new OauthTokenException('invalid_client');
+    }
+    return this.clientService.getClientByUuid(clientId).catch(() => {
+      throw new OauthTokenException('invalid_client');
+    });
+  }
+
+  private verifySecret(client: Client, clientSecret: string | undefined): void {
+    if (!clientSecret || !bcrypt.compareSync(clientSecret, client.secret)) {
+      throw new OauthTokenException('invalid_client');
+    }
   }
 
   /**

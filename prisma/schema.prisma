@@ -12,6 +12,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum TokenEndpointAuthMethod {
+  none
+  client_secret_post
+  client_secret_basic
+}
+
 enum RoleType {
   OWNER
   ADMIN
@@ -54,9 +60,10 @@ model Client {
   updatedAt         DateTime  @updatedAt
   deleteRequestedAt DateTime? @map("delete_requested_at")
 
-  idTokenAllowed Boolean  @default(false)
-  scopes         String[]
-  optionalScopes String[] @map("optional_scopes")
+  idTokenAllowed          Boolean                 @default(false)
+  tokenEndpointAuthMethod TokenEndpointAuthMethod @default(none) @map("token_endpoint_auth_method")
+  scopes                  String[]
+  optionalScopes          String[]                @map("optional_scopes")
 
   userLinks    UserClientRelation[] //role-aware
   consent      Consent[]
@@ -85,12 +92,18 @@ model RefreshToken {
   nonce     String?  @db.VarChar(255)
   scopes    String[]
 
+  /// every refresh token rotated from the same authorization shares this id
+  familyId String    @default(uuid()) @db.Uuid
+  /// set when the token is rotated. a used token that comes back means it leaked
+  usedAt   DateTime?
+
   clientUuid String @db.Uuid
   userUuid   String @db.Uuid
 
   client Client @relation(fields: [clientUuid], references: [uuid], onDelete: Cascade)
   user   User   @relation(fields: [userUuid], references: [uuid], onDelete: Cascade)
 
+  @@index([familyId])
   @@map("refresh_token")
 }
 

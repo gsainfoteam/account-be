@@ -156,11 +156,17 @@ export class ClientRepository {
       scopes,
       optionalScopes,
       idTokenAllowed,
+      tokenEndpointAuthMethod,
     }: Pick<Client, 'uuid'> &
       Partial<
         Pick<
           Client,
-          'name' | 'urls' | 'scopes' | 'optionalScopes' | 'idTokenAllowed'
+          | 'name'
+          | 'urls'
+          | 'scopes'
+          | 'optionalScopes'
+          | 'idTokenAllowed'
+          | 'tokenEndpointAuthMethod'
         >
       >,
     userUuid: string,
@@ -181,6 +187,7 @@ export class ClientRepository {
           scopes,
           optionalScopes,
           idTokenAllowed,
+          tokenEndpointAuthMethod,
         },
       })
       .catch((error) => {
