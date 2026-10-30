@@ -1,5 +1,9 @@
 import { CacheNotFoundException } from '@lib/redis';
-import { BadRequestException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Client, RefreshToken, User } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
@@ -689,6 +693,37 @@ describe('OauthService', () => {
       const { service } = setup();
       await expect(service.userinfo('unknown')).rejects.toBeInstanceOf(
         UnauthorizedException,
+      );
+    });
+
+    const clientToken = (redis: Map<string, unknown>, scope: ScopeType[]) =>
+      redis.set('token:ct', { to: 'client', clientId: 'client-1', scope });
+
+    it('leaves out the scopes the user did not consent to', async () => {
+      const { service, redis } = setup();
+      clientToken(redis, ['name', 'phone_number']);
+
+      const info = await service.userinfo(
+        'ct',
+        '11111111-1111-4111-8111-111111111111',
+      );
+
+      expect(info.name).toBe('홍길동');
+      expect(info.phoneNumber).toBeUndefined();
+    });
+
+    it('answers a user without a consent record and a sub that is not a uuid alike', async () => {
+      const { service, redis, oauthRepository } = setup();
+      clientToken(redis, ['name']);
+      oauthRepository.findConsent.mockImplementationOnce(() =>
+        Promise.reject(new OauthTokenException('invalid_grant')),
+      );
+
+      await expect(
+        service.userinfo('ct', '11111111-1111-4111-8111-111111111111'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.userinfo('ct', 'not-a-uuid')).rejects.toBeInstanceOf(
+        NotFoundException,
       );
     });
   });

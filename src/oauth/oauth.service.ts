@@ -4,12 +4,14 @@ import { CacheNotFoundException, RedisService } from '@lib/redis';
 import {
   BadRequestException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Client, RefreshToken, User } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
+import { isUUID } from 'class-validator';
 import * as crypto from 'crypto';
 import { AuthContext } from 'src/auth/types/authContext.type';
 import { ClientService } from 'src/client/client.service';
@@ -616,22 +618,25 @@ export class OauthService {
       });
 
     let user: User;
+    let scopes: readonly string[] = tokenData.scope;
     if (tokenData.to === 'client') {
       if (!userUuid) {
         throw new UnauthorizedException();
       }
-      const consent = await this.oauthRepository.findConsent(
-        userUuid,
-        tokenData.clientId,
-      );
+      // an unknown user and one who never consented get the same 404, so a client cannot probe which subs exist
+      const consent = isUUID(userUuid)
+        ? await this.oauthRepository
+            .findConsent(userUuid, tokenData.clientId)
+            .catch((error: unknown) => {
+              if (error instanceof OauthTokenException) return null;
+              throw error;
+            })
+        : null;
       if (!consent) {
-        throw new UnauthorizedException();
+        throw new NotFoundException();
       }
-      consent.scopes.forEach((v) => {
-        if (!isScope(v) || !tokenData.scope.includes(v)) {
-          throw new UnauthorizedException();
-        }
-      });
+      // the token may carry optional scopes this user declined
+      scopes = tokenData.scope.filter((s) => consent.scopes.includes(s));
       user = await this.userService.findUserByUuid({
         uuid: userUuid,
       });
@@ -646,20 +651,18 @@ export class OauthService {
 
     return {
       sub: user.uuid,
-      name: tokenData.scope.includes('name') ? user.name : undefined,
-      profile: tokenData.scope.includes('profile') ? user.profile : undefined,
-      picture: tokenData.scope.includes('picture') ? user.picture : undefined,
-      email: tokenData.scope.includes('email') ? user.email : undefined,
-      studentId: tokenData.scope.includes('student_id')
-        ? user.studentId
-        : undefined,
-      isStudentIdVerified: tokenData.scope.includes('student_id')
+      name: scopes.includes('name') ? user.name : undefined,
+      profile: scopes.includes('profile') ? user.profile : undefined,
+      picture: scopes.includes('picture') ? user.picture : undefined,
+      email: scopes.includes('email') ? user.email : undefined,
+      studentId: scopes.includes('student_id') ? user.studentId : undefined,
+      isStudentIdVerified: scopes.includes('student_id')
         ? user.isIdVerified
         : undefined,
-      phoneNumber: tokenData.scope.includes('phone_number')
+      phoneNumber: scopes.includes('phone_number')
         ? user.phoneNumber
         : undefined,
-      isPhoneNumberVerified: tokenData.scope.includes('phone_number')
+      isPhoneNumberVerified: scopes.includes('phone_number')
         ? user.isPhoneNumberVerified
         : undefined,
     };
