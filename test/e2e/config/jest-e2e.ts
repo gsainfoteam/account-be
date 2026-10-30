@@ -1,12 +1,12 @@
 import type { Config } from '@jest/types';
 
 const config: Config.InitialOptions = {
-  moduleFileExtensions: ['js', 'json', 'ts'],
+  moduleFileExtensions: ['js', 'json', 'ts', 'tsx'],
   rootDir: '../../..',
   testEnvironment: 'node',
   testRegex: '.e2e-spec.ts$',
   transform: {
-    '^.+\\.(t|j)s$': [
+    '^.+\\.(t|j)sx?$': [
       'ts-jest',
       {
         tsconfig: 'tsconfig.json',
@@ -18,14 +18,8 @@ const config: Config.InitialOptions = {
     ],
   },
   moduleNameMapper: {
-    '^@lib/cache(|/.*)$': '<rootDir>/libs/cache/src/$1',
-    '^@lib/global(|/.*)$': '<rootDir>/libs/global/src/$1',
-    '^@lib/logger(|/.*)$': '<rootDir>/libs/logger/src/$1',
-    '^@lib/mail(|/.*)$': '<rootDir>/libs/mail/src/$1',
-    '^@lib/object(|/.*)$': '<rootDir>/libs/object/src/$1',
-    '^@lib/prisma$': '<rootDir>/libs/prisma/src/index.ts',
-    '^@lib/prisma/(.*)$': '<rootDir>/libs/prisma/src/$1',
-    '^@lib/redis(|/.*)$': '<rootDir>/libs/redis/src/$1',
+    '^@lib/([^/]+)$': '<rootDir>/libs/$1/src',
+    '^@lib/([^/]+)/(.*)$': '<rootDir>/libs/$1/src/$2',
     '^src/(.*)$': '<rootDir>/src/$1',
     '^@gsainfoteam/nest-observability$':
       '<rootDir>/test/unit/mocks/nest-observability.ts',

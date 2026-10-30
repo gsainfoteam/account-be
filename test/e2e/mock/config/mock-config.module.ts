@@ -1,10 +1,8 @@
-import { DynamicModule } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
 
-class MockConfigService {
+export class MockConfigService {
   private readonly configMap: Map<string, any> = new Map();
 
   constructor(envFilePath?: string) {
@@ -63,28 +61,5 @@ class MockConfigService {
       throw new Error(`${key} 설정을 찾을 수 없습니다.`);
     }
     return this.configMap.get(key) as T;
-  }
-}
-
-export class MockConfigModule {
-  /**
-   * ConfigModule을 모킹한 모듈을 생성합니다.
-   * @param options 설정 옵션
-   * @returns 동적 모듈
-   */
-  static forRoot(options?: { envFilePath?: string }): DynamicModule {
-    const configService = new MockConfigService(options?.envFilePath);
-
-    return {
-      global: true,
-      module: MockConfigModule,
-      providers: [
-        {
-          provide: ConfigService,
-          useValue: configService,
-        },
-      ],
-      exports: [ConfigService],
-    };
   }
 }
