@@ -87,7 +87,9 @@ export class ClientRepository {
       name,
       urls,
       secret,
-    }: Pick<Client, 'name' | 'secret'> & Partial<Pick<Client, 'urls'>>,
+      tokenEndpointAuthMethod,
+    }: Pick<Client, 'name' | 'secret' | 'tokenEndpointAuthMethod'> &
+      Partial<Pick<Client, 'urls'>>,
     userUuid: string,
   ): Promise<Client> {
     return this.prismaService.client
@@ -96,6 +98,7 @@ export class ClientRepository {
           name,
           urls,
           secret,
+          tokenEndpointAuthMethod,
           userLinks: {
             create: {
               userUuid: userUuid,

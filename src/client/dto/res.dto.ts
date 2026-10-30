@@ -147,7 +147,11 @@ export class ClientPublicResDto implements Client {
   @Exclude()
   idTokenAllowed: boolean;
 
-  @Exclude()
+  @ApiProperty({
+    description: 'how the client authenticates at the token endpoint',
+    enum: TokenEndpointAuthMethod,
+    example: TokenEndpointAuthMethod.client_secret_post,
+  })
   tokenEndpointAuthMethod: TokenEndpointAuthMethod;
 
   @Exclude()

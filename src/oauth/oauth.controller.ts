@@ -1,5 +1,6 @@
 import { OtelClassSerializerInterceptor } from '@gsainfoteam/nest-observability';
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -30,17 +31,24 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { User } from '@prisma/client';
+import { GetAuthContext } from 'src/auth/decorator/getAuthContext.decorator';
 import { GetUser } from 'src/auth/decorator/getUser.decorator';
 import { UserGuard } from 'src/auth/guard/auth.guard';
+import { AuthContext } from 'src/auth/types/authContext.type';
 
 import {
   AuthorizationReqDto,
+  AuthorizeErrorReqDto,
   ConsentReqDto,
+  LogoutRedirectReqDto,
   RevokeReqDto,
   TokenReqDto,
 } from './dto/req.dto';
 import { TokenResDto, UserInfoResDto } from './dto/res.dto';
-import { OauthAuthorizeExceptionFilter } from './filters/oauthAuthorize.filter';
+import {
+  OauthAuthorizeExceptionFilter,
+  UNTRUSTED_REDIRECT,
+} from './filters/oauthAuthorize.filter';
 import { OauthTokenExceptionFilter } from './filters/oauthToken.filter';
 import { BasicAuthGuard } from './guards/basicAuth.guard';
 import { OauthService } from './oauth.service';
@@ -98,11 +106,50 @@ export class OauthController {
   async authorize(
     @Query() query: AuthorizationReqDto,
     @GetUser() user: User,
+    @GetAuthContext() auth: AuthContext | undefined,
   ): Promise<HttpRedirectResponse> {
     return {
-      url: await this.oauthService.authorize(query, user),
+      url: await this.oauthService.authorize(query, user, auth),
       statusCode: 302,
     };
+  }
+
+  @ApiOperation({
+    summary: 'report an authorize error to the client',
+    description:
+      'account-fe sends the user here when it turns an authorize request away. the error is redirected to redirect_uri only when it is registered for the client.',
+  })
+  @ApiBadRequestResponse({
+    description: 'unknown client_id or unregistered redirect_uri',
+  })
+  @Redirect()
+  @Get('authorize/error')
+  async authorizeError(
+    @Query() query: AuthorizeErrorReqDto,
+  ): Promise<HttpRedirectResponse> {
+    const url = await this.oauthService.authorizeErrorRedirect(query);
+    if (!url) throw new BadRequestException(UNTRUSTED_REDIRECT);
+
+    return { url, statusCode: 302 };
+  }
+
+  @ApiOperation({
+    summary: 'return to the client after logout',
+    description:
+      'account-fe sends the user here after it ended the IdP session for an RP-Initiated Logout request. the user is redirected to post_logout_redirect_uri only when it is registered for the client.',
+  })
+  @ApiBadRequestResponse({
+    description: 'unknown client_id or unregistered post_logout_redirect_uri',
+  })
+  @Redirect()
+  @Get('logout/redirect')
+  async logoutRedirect(
+    @Query() query: LogoutRedirectReqDto,
+  ): Promise<HttpRedirectResponse> {
+    const url = await this.oauthService.logoutRedirect(query);
+    if (!url) throw new BadRequestException(UNTRUSTED_REDIRECT);
+
+    return { url, statusCode: 302 };
   }
 
   @ApiOperation({

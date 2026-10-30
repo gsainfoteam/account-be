@@ -97,6 +97,10 @@ model RefreshToken {
   /// set when the token is rotated. a used token that comes back means it leaked
   usedAt   DateTime?
 
+  /// when and how the user signed in to the IdP, so refreshed id_tokens keep auth_time and amr
+  authTime DateTime?
+  amr      String[]  @default([])
+
   clientUuid String @db.Uuid
   userUuid   String @db.Uuid
 

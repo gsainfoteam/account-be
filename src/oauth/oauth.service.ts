@@ -8,9 +8,10 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { Client, User } from '@prisma/client';
+import { Client, RefreshToken, User } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
+import { AuthContext } from 'src/auth/types/authContext.type';
 import { ClientService } from 'src/client/client.service';
 import { UserService } from 'src/user/user.service';
 
@@ -23,6 +24,7 @@ import { TokenResDto, UserInfoResDto } from './dto/res.dto';
 import { OauthAuthorizeException } from './exceptions/oauth.authorize.exception';
 import { OauthTokenException } from './exceptions/oauth.token.exception';
 import { OauthRepository } from './oauth.repository';
+import { AuthorizeError } from './types/authorizationError.type';
 import { AuthorizeCacheType } from './types/authorizeCache.type';
 import {
   ClientCredentialsGrantContentType,
@@ -32,6 +34,12 @@ import {
 } from './types/grant.type';
 import { isScope, isTokenScope } from './types/scope.type';
 import { TokenCacheType } from './types/tokenCache.type';
+
+// client urls accept any scheme so native apps can register theirs, which also lets a javascript:// url through
+const SCRIPT_SCHEMES = ['javascript:', 'data:', 'vbscript:'];
+const isRedirectable = (registered: string[], uri: string): boolean =>
+  registered.includes(uri) &&
+  !SCRIPT_SCHEMES.includes(new URL(uri).protocol.toLowerCase());
 
 @Loggable()
 @Trace()
@@ -116,6 +124,7 @@ export class OauthService {
       nonce,
     }: AuthorizationReqDto,
     user: User,
+    auth?: AuthContext,
   ): Promise<string> {
     // client_id and redirect_uri come first: until both are trusted, errors must not be redirected
     const client = await this.clientService
@@ -123,7 +132,7 @@ export class OauthService {
       .catch(() => {
         throw new OauthAuthorizeException('invalid_request');
       });
-    if (!client.urls.includes(redirectUri)) {
+    if (!isRedirectable(client.urls, redirectUri)) {
       throw new OauthAuthorizeException('invalid_request');
     }
 
@@ -142,14 +151,9 @@ export class OauthService {
         throw new OauthAuthorizeException('invalid_scope');
       }
     });
-    // check if the id token is supported
-    if (scope.includes('openid')) {
-      if (!client.idTokenAllowed) {
-        throw new OauthAuthorizeException('invalid_scope');
-      }
-      if (!nonce) {
-        throw new OauthAuthorizeException('invalid_request');
-      }
+    // an id_token carries only the claims userinfo already gives this client, so every client may ask for one
+    if (scope.includes('openid') && !nonce) {
+      throw new OauthAuthorizeException('invalid_request');
     }
 
     const code = this.generateOpaqueToken();
@@ -163,6 +167,7 @@ export class OauthService {
         redirectUri,
         scope,
         nonce,
+        ...auth,
       },
       {
         prefix: this.CodePrefix,
@@ -179,6 +184,76 @@ export class OauthService {
     if (state) url.searchParams.set('state', state);
 
     return url.toString();
+  }
+
+  /**
+   * build the redirect that reports an authorize error to the client, as RFC 6749 section 4.1.2.1 and RFC 9207 describe
+   * @param param0 the client, where it asked to be redirected, and the error to report
+   * @returns the redirect url, or null when client_id or redirect_uri cannot be trusted and the error must be shown to the user instead
+   */
+  async authorizeErrorRedirect({
+    clientId,
+    redirectUri,
+    state,
+    error,
+    errorDescription,
+  }: {
+    clientId: string | null;
+    redirectUri: string | null;
+    state?: string | null;
+    error: AuthorizeError;
+    errorDescription?: string;
+  }): Promise<string | null> {
+    const url = await this.registeredRedirect(clientId, redirectUri);
+    if (!url) return null;
+
+    url.searchParams.set('error', error);
+    if (errorDescription) {
+      url.searchParams.set('error_description', errorDescription);
+    }
+    url.searchParams.set(
+      'iss',
+      this.configService.getOrThrow<string>('JWT_ISSUER'),
+    );
+    if (state) url.searchParams.set('state', state);
+
+    return url.toString();
+  }
+
+  /**
+   * build the redirect back to the client after account-fe ended the IdP session, as OIDC RP-Initiated Logout describes
+   * @param param0 the client, where it asked to return after logout, and its state
+   * @returns the redirect url, or null when client_id or post_logout_redirect_uri cannot be trusted
+   */
+  async logoutRedirect({
+    clientId,
+    postLogoutRedirectUri,
+    state,
+  }: {
+    clientId: string;
+    postLogoutRedirectUri: string;
+    state?: string;
+  }): Promise<string | null> {
+    const url = await this.registeredRedirect(clientId, postLogoutRedirectUri);
+    if (!url) return null;
+
+    if (state) url.searchParams.set('state', state);
+
+    return url.toString();
+  }
+
+  private async registeredRedirect(
+    clientId: string | null,
+    redirectUri: string | null,
+  ): Promise<URL | null> {
+    if (!clientId || !redirectUri) return null;
+
+    const client = await this.clientService
+      .getClientByUuid(clientId)
+      .catch(() => null);
+    if (!client || !isRedirectable(client.urls, redirectUri)) return null;
+
+    return new URL(redirectUri);
   }
 
   /**
@@ -254,13 +329,15 @@ export class OauthService {
     let refreshToken = undefined;
     if (cache.scope.includes('offline_access')) {
       refreshToken = this.generateOpaqueToken();
-      await this.oauthRepository.createRefreshToken(
-        refreshToken,
-        cache.scope,
-        cache.UserUuid,
-        cache.clientId,
-        cache.nonce,
-      );
+      await this.oauthRepository.createRefreshToken({
+        token: refreshToken,
+        scopes: cache.scope,
+        userUuid: cache.UserUuid,
+        clientUuid: cache.clientId,
+        nonce: cache.nonce,
+        authTime: cache.authTime,
+        amr: cache.amr,
+      });
     }
 
     let idToken = undefined;
@@ -273,6 +350,8 @@ export class OauthService {
         sub: cache.UserUuid,
         aud: cache.clientId,
         nonce: cache.nonce,
+        auth_time: cache.authTime,
+        amr: cache.amr,
         scope: cache.scope.join(' '),
         profile: cache.scope.includes('profile') ? user.profile : undefined,
         picture: cache.scope.includes('picture') ? user.picture : undefined,
@@ -281,8 +360,14 @@ export class OauthService {
         student_id: cache.scope.includes('student_id')
           ? user.studentId
           : undefined,
+        is_student_id_verified: cache.scope.includes('student_id')
+          ? user.isIdVerified
+          : undefined,
         phone_number: cache.scope.includes('phone_number')
           ? user.phoneNumber
+          : undefined,
+        is_phone_number_verified: cache.scope.includes('phone_number')
+          ? user.isPhoneNumberVerified
           : undefined,
       });
     }
@@ -325,21 +410,27 @@ export class OauthService {
       throw new OauthTokenException('invalid_grant');
     }
 
-    // a rotated refresh token coming back means it leaked, so the whole grant ends (OAuth 2.1 section 4.3.1)
-    const rotated =
-      !refreshTokenData.usedAt &&
-      (await this.oauthRepository.markRefreshTokenUsed(refreshToken));
-    if (!rotated) {
-      await this.oauthRepository.deleteRefreshTokenFamily(
-        refreshTokenData.familyId,
-      );
-      throw new OauthTokenException('invalid_grant');
-    }
-    await this.oauthRepository.pruneRefreshTokenFamily(
-      refreshTokenData.familyId,
-    );
-
     const scopes = refreshTokenData.scopes.filter(isScope);
+    const auth = authContextOf(refreshTokenData);
+    const newRefreshToken = scopes.includes('offline_access')
+      ? this.generateOpaqueToken()
+      : undefined;
+    const rotated = await this.oauthRepository.rotateRefreshToken(
+      refreshToken,
+      refreshTokenData.familyId,
+      newRefreshToken === undefined
+        ? undefined
+        : {
+            token: newRefreshToken,
+            scopes,
+            userUuid: refreshTokenData.userUuid,
+            clientUuid: refreshTokenData.clientUuid,
+            nonce: refreshTokenData.nonce,
+            familyId: refreshTokenData.familyId,
+            ...auth,
+          },
+    );
+    if (!rotated) throw new OauthTokenException('invalid_grant');
 
     const accessToken = this.generateOpaqueToken();
     await this.redisService.set<TokenCacheType>(
@@ -356,19 +447,6 @@ export class OauthService {
       },
     );
 
-    let newRefreshToken = undefined;
-    if (scopes.includes('offline_access')) {
-      newRefreshToken = this.generateOpaqueToken();
-      await this.oauthRepository.createRefreshToken(
-        newRefreshToken,
-        scopes,
-        refreshTokenData.userUuid,
-        refreshTokenData.clientUuid,
-        refreshTokenData.nonce ?? undefined,
-        refreshTokenData.familyId,
-      );
-    }
-
     let idToken = undefined;
     if (scopes.includes('openid')) {
       const user = await this.userService.findUserByUuid({
@@ -380,13 +458,21 @@ export class OauthService {
         aud: refreshTokenData.clientUuid,
         scope: scopes.join(' '),
         nonce: refreshTokenData.nonce ?? undefined,
+        auth_time: auth.authTime,
+        amr: auth.amr,
         profile: scopes.includes('profile') ? user.profile : undefined,
         picture: scopes.includes('picture') ? user.picture : undefined,
         name: scopes.includes('name') ? user.name : undefined,
         email: scopes.includes('email') ? user.email : undefined,
         student_id: scopes.includes('student_id') ? user.studentId : undefined,
+        is_student_id_verified: scopes.includes('student_id')
+          ? user.isIdVerified
+          : undefined,
         phone_number: scopes.includes('phone_number')
           ? user.phoneNumber
+          : undefined,
+        is_phone_number_verified: scopes.includes('phone_number')
+          ? user.isPhoneNumberVerified
           : undefined,
       });
     }
@@ -618,4 +704,12 @@ export class OauthService {
   private generateOpaqueToken(): string {
     return crypto.randomBytes(32).toString('base64url');
   }
+}
+
+// refresh tokens stored before auth_time was kept have neither, and their id_tokens omit both claims
+function authContextOf({ authTime, amr }: RefreshToken): Partial<AuthContext> {
+  return {
+    authTime: authTime ? Math.floor(authTime.getTime() / 1000) : undefined,
+    amr: amr.length ? amr : undefined,
+  };
 }

@@ -1,11 +1,17 @@
+import fastifyCookie from '@fastify/cookie';
 import { MailModule, MailService } from '@lib/mail';
-import { ConfigModule } from '@nestjs/config';
-import { NestApplication } from '@nestjs/core';
+import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
+import {
+  FastifyAdapter,
+  NestFastifyApplication,
+} from '@nestjs/platform-fastify';
 import { Test } from '@nestjs/testing';
+import { generateKeyPairSync } from 'crypto';
 import request from 'supertest';
 
 import { AppModule } from '../../src/app.module';
-import { MockConfigModule } from './mock/config/mock-config.module';
+import { MockConfigService } from './mock/config/mock-config.module';
 import { MockMailModule } from './mock/mail/mock-mail.module';
 import { MockMailService } from './mock/mail/mock-mail.service';
 
@@ -44,28 +50,50 @@ const TEST_DATA = {
 } as const;
 
 describe('User Lifecycle Flow', () => {
-  let app: NestApplication;
+  let app: NestFastifyApplication;
   let httpRequest: any;
   let mailService: MockMailService;
   let verificationToken: string;
   let userToken: string;
   let currentPassword: string = TEST_DATA.USER.INITIAL_PASSWORD;
 
+  const config = new MockConfigService();
+  // generated per run so no private key has to be committed
+  config.set(
+    'JWT_PRIVATE_KEY',
+    generateKeyPairSync('ec', { namedCurve: 'prime256v1' })
+      .privateKey.export({ type: 'pkcs8', format: 'pem' })
+      .toString(),
+  );
+  // student id and phone number checks call outside services, so the test signs their results as VerifyService would
+  const signVerification = (sub: string, hint: 'studentId' | 'phoneNumber') =>
+    new JwtService({
+      secret: config.getOrThrow<string>('VERIFICATION_JWT_SECRET'),
+    }).sign(
+      { iss: config.getOrThrow<string>('JWT_ISSUER'), sub, hint },
+      { algorithm: 'HS256', expiresIn: '10m' },
+    );
+
   beforeAll(async () => {
     const moduleFixture = await Test.createTestingModule({
       imports: [AppModule],
     })
-      .overrideModule(ConfigModule)
-      .useModule(MockConfigModule.forRoot())
+      // AppModule's ConfigModule.forRoot() is a dynamic module that overrideModule(ConfigModule) does not reach
+      .overrideProvider(ConfigService)
+      .useValue(config)
       .overrideModule(MailModule)
       .useModule(MockMailModule)
       .compile();
 
-    app = moduleFixture.createNestApplication();
+    app = moduleFixture.createNestApplication<NestFastifyApplication>(
+      new FastifyAdapter(),
+    );
+    await app.register(fastifyCookie);
     mailService = moduleFixture.get<MailService>(
       MailService,
     ) as unknown as MockMailService;
     await app.init();
+    await app.getHttpAdapter().getInstance().ready();
     httpRequest = request(app.getHttpServer());
   });
 
@@ -88,10 +116,10 @@ describe('User Lifecycle Flow', () => {
     }
 
     expect(email.to).toEqual(TEST_DATA.USER.EMAIL);
-    expect(email.subject).toContain('Verification Code');
+    expect(email.subject).toContain('인증 코드');
 
     const content = email.content || fail('이메일 내용이 없습니다');
-    const codeRegex = /verification code is <b>([a-zA-Z0-9]+)<\/b>/i;
+    const codeRegex = />\s*(\d{6})\s*</;
     const matches = content.match(codeRegex);
     const code = matches ? matches[1] : fail('인증 코드를 찾을 수 없습니다');
 
@@ -148,7 +176,15 @@ describe('User Lifecycle Flow', () => {
       name: TEST_DATA.USER.NAME,
       studentId: TEST_DATA.USER.STUDENT_ID,
       phoneNumber: TEST_DATA.USER.PHONE_NUMBER,
-      verificationJwtToken: verificationToken,
+      emailVerificationJwtToken: verificationToken,
+      studentIdVerificationJwtToken: signVerification(
+        TEST_DATA.USER.STUDENT_ID,
+        'studentId',
+      ),
+      phoneNumberVerificationJwtToken: signVerification(
+        TEST_DATA.USER.PHONE_NUMBER,
+        'phoneNumber',
+      ),
     };
 
     await httpRequest.post('/user').send(registerData).expect(201);
@@ -200,7 +236,7 @@ describe('User Lifecycle Flow', () => {
 
   it('[5] Profile Management: Should get presigned URL for profile image upload', async () => {
     const response = await httpRequest
-      .patch('/user/profile')
+      .patch('/user/picture')
       .set('Authorization', `Bearer ${userToken}`)
       .query({ length: TEST_DATA.PROFILE.IMAGE_LENGTH })
       .expect(200);
@@ -209,34 +245,12 @@ describe('User Lifecycle Flow', () => {
     expect(typeof response.body.presignedUrl).toBe('string');
   });
 
-  it('[6] Password Update: Should change password after email verification and login with new password', async () => {
-    await httpRequest
-      .post('/verify/email')
-      .send({ email: TEST_DATA.USER.EMAIL })
-      .expect(201);
-
-    const email = mailService.getLastEmailSentTo(TEST_DATA.USER.EMAIL);
-    const content = email?.content || fail('이메일 내용이 없습니다');
-    const codeRegex = /verification code is <b>([a-zA-Z0-9]+)<\/b>/i;
-    const matches = content.match(codeRegex);
-    const code = matches ? matches[1] : fail('인증 코드를 찾을 수 없습니다');
-
-    const verifyResponse = await httpRequest
-      .post('/verify')
-      .send({
-        subject: TEST_DATA.USER.EMAIL,
-        code,
-        hint: TEST_DATA.VERIFICATION.EMAIL_HINT,
-      })
-      .expect(201);
-
-    const newVerificationToken = verifyResponse.body.verificationJwtToken;
-
+  it('[6] Password Update: Should change password with the old one and login with the new password', async () => {
     await httpRequest
       .patch('/user/password')
+      .set('Authorization', `Bearer ${userToken}`)
       .send({
-        email: TEST_DATA.USER.EMAIL,
-        verificationJwtToken: newVerificationToken,
+        oldPassword: currentPassword,
         password: TEST_DATA.NEW_PASSWORD,
       })
       .expect(200);

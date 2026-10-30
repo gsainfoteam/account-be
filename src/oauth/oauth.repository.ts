@@ -6,12 +6,34 @@ import {
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
-import { Consent, RefreshToken } from '@prisma/client';
+import { Consent, Prisma, RefreshToken } from '@prisma/client';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
+import { AuthContext } from 'src/auth/types/authContext.type';
 
 import { OauthTokenException } from './exceptions/oauth.token.exception';
 
 const MAX_REFRESH_TOKEN_AGE = 60 * 60 * 24 * 30; // 30 days
+
+type NewRefreshToken = Pick<
+  RefreshToken,
+  'token' | 'scopes' | 'userUuid' | 'clientUuid'
+> &
+  Partial<Pick<RefreshToken, 'nonce' | 'familyId'>> &
+  Partial<AuthContext>;
+
+function toCreateData({ authTime, ...refreshToken }: NewRefreshToken) {
+  return {
+    ...refreshToken,
+    authTime: authTime === undefined ? undefined : new Date(authTime * 1000),
+    expiresAt: new Date(Date.now() + MAX_REFRESH_TOKEN_AGE * 1000),
+  };
+}
+
+// without it a family deleted for reuse could get a new token from a rotation committing right after,
+// since the delete does not see rows inserted after it started
+async function lockFamily(tx: Prisma.TransactionClient, familyId: string) {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${familyId}))`;
+}
 
 @Trace()
 @Loggable()
@@ -46,37 +68,41 @@ export class OauthRepository {
   }
 
   async createRefreshToken(
-    token: string,
-    scopes: string[],
-    userUuid: string,
-    clientUuid: string,
-    nonce?: string,
-    familyId?: string,
+    refreshToken: NewRefreshToken,
   ): Promise<RefreshToken> {
     return this.prismaService.refreshToken.create({
-      data: {
-        token,
-        userUuid,
-        clientUuid,
-        scopes,
-        nonce,
-        familyId,
-        expiresAt: new Date(Date.now() + MAX_REFRESH_TOKEN_AGE * 1000),
-      },
+      data: toCreateData(refreshToken),
     });
   }
 
   /**
-   * mark the refresh token as rotated, unless another request already did
-   * @param token the refresh token being rotated
-   * @returns whether this call marked it, so two requests racing with the same token cannot both win
+   * mark the presented refresh token as used and issue the next one of its family.
+   * a token that was already used means it leaked, so the whole family is deleted instead (OAuth 2.1 section 4.3.1)
+   * @returns false when the token was already used, by an earlier request or one racing this one
    */
-  async markRefreshTokenUsed(token: string): Promise<boolean> {
-    const { count } = await this.prismaService.refreshToken.updateMany({
-      where: { token, usedAt: null },
-      data: { usedAt: new Date() },
+  async rotateRefreshToken(
+    token: string,
+    familyId: string,
+    next?: NewRefreshToken,
+  ): Promise<boolean> {
+    return this.prismaService.$transaction(async (tx) => {
+      await lockFamily(tx, familyId);
+      const { count } = await tx.refreshToken.updateMany({
+        where: { token, usedAt: null },
+        data: { usedAt: new Date() },
+      });
+      if (count !== 1) {
+        await tx.refreshToken.deleteMany({ where: { familyId } });
+        return false;
+      }
+
+      // rotated tokens stay until they expire so that their reuse is caught
+      await tx.refreshToken.deleteMany({
+        where: { familyId, expiresAt: { lt: new Date() } },
+      });
+      if (next) await tx.refreshToken.create({ data: toCreateData(next) });
+      return true;
     });
-    return count === 1;
   }
 
   /**
@@ -84,16 +110,9 @@ export class OauthRepository {
    * @param familyId the family to delete
    */
   async deleteRefreshTokenFamily(familyId: string): Promise<void> {
-    await this.prismaService.refreshToken.deleteMany({ where: { familyId } });
-  }
-
-  /**
-   * delete the expired tokens of the family. rotated tokens are kept until they expire to catch reuse
-   * @param familyId the family to prune
-   */
-  async pruneRefreshTokenFamily(familyId: string): Promise<void> {
-    await this.prismaService.refreshToken.deleteMany({
-      where: { familyId, expiresAt: { lt: new Date() } },
+    await this.prismaService.$transaction(async (tx) => {
+      await lockFamily(tx, familyId);
+      await tx.refreshToken.deleteMany({ where: { familyId } });
     });
   }
 

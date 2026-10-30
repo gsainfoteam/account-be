@@ -3,6 +3,7 @@ import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { Client, RefreshToken, User } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
+import { AuthContext } from 'src/auth/types/authContext.type';
 
 import { AuthorizationReqDto } from './dto/req.dto';
 import { OauthTokenException } from './exceptions/oauth.token.exception';
@@ -59,20 +60,29 @@ function setup(registered: Client = client()) {
   const oauthRepository = {
     findConsent: jest.fn(() => Promise.resolve({ scopes: ['name'] })),
     createRefreshToken: jest.fn(() => Promise.resolve()),
-    findRefreshTokenByToken: jest.fn((): Promise<RefreshToken> =>
-      Promise.reject(new OauthTokenException('invalid_grant')),
+    findRefreshTokenByToken: jest.fn(
+      (): Promise<RefreshToken> =>
+        Promise.reject(new OauthTokenException('invalid_grant')),
     ),
     deleteRefreshTokenByToken: jest.fn(() => Promise.resolve()),
-    markRefreshTokenUsed: jest.fn(() => Promise.resolve(true)),
+    rotateRefreshToken: jest.fn<Promise<boolean>, [string, string, unknown?]>(
+      () => Promise.resolve(true),
+    ),
     deleteRefreshTokenFamily: jest.fn(() => Promise.resolve()),
-    pruneRefreshTokenFamily: jest.fn(() => Promise.resolve()),
   };
   const clientService = {
     getClientByUuid: jest.fn(() => Promise.resolve(registered)),
   };
   const userService = {
     findUserByUuid: jest.fn(() =>
-      Promise.resolve({ uuid: 'user-1', name: '홍길동' }),
+      Promise.resolve({
+        uuid: 'user-1',
+        name: '홍길동',
+        studentId: '20231234',
+        isIdVerified: true,
+        phoneNumber: '010-0000-0000',
+        isPhoneNumberVerified: false,
+      }),
     ),
   };
   const configService = {
@@ -104,6 +114,8 @@ function storedRefreshToken(
     scopes: ['offline_access', 'name'],
     familyId: 'family-1',
     usedAt: null,
+    authTime: null,
+    amr: [],
     clientUuid: 'client-1',
     userUuid: 'user-1',
     ...overrides,
@@ -133,8 +145,14 @@ function authorizeRequest(
   };
 }
 
-async function authorize(service: OauthService, scope: ScopeType[] = ['name']) {
-  const url = new URL(await service.authorize(authorizeRequest(scope), user));
+async function authorize(
+  service: OauthService,
+  scope: ScopeType[] = ['name'],
+  auth?: AuthContext,
+) {
+  const url = new URL(
+    await service.authorize(authorizeRequest(scope), user, auth),
+  );
   return { url, code: url.searchParams.get('code')! };
 }
 
@@ -184,6 +202,78 @@ describe('OauthService', () => {
     });
   });
 
+  describe('authorizeErrorRedirect', () => {
+    it('reports the error to a registered redirect URI with state and iss', async () => {
+      const { service } = setup();
+      const url = new URL(
+        (await service.authorizeErrorRedirect({
+          clientId: 'client-1',
+          redirectUri: 'https://app.example/callback?from=login',
+          state: 'a b&c',
+          error: 'access_denied',
+          errorDescription: 'user_cancelled',
+        }))!,
+      );
+
+      expect(Object.fromEntries(url.searchParams)).toEqual({
+        from: 'login',
+        error: 'access_denied',
+        error_description: 'user_cancelled',
+        iss: 'https://api.account.example',
+        state: 'a b&c',
+      });
+    });
+
+    it('refuses a redirect URI the client did not register', async () => {
+      const { service } = setup();
+
+      await expect(
+        service.authorizeErrorRedirect({
+          clientId: 'client-1',
+          redirectUri: 'https://evil.example/callback',
+          error: 'login_required',
+        }),
+      ).resolves.toBeNull();
+    });
+  });
+
+  describe('logoutRedirect', () => {
+    it('returns to a registered post-logout URI with state', async () => {
+      const { service } = setup();
+
+      await expect(
+        service.logoutRedirect({
+          clientId: 'client-1',
+          postLogoutRedirectUri: 'https://app.example/callback?from=login',
+          state: 'a b&c',
+        }),
+      ).resolves.toBe('https://app.example/callback?from=login&state=a+b%26c');
+    });
+
+    it('refuses a post-logout URI the client did not register', async () => {
+      const { service } = setup();
+
+      await expect(
+        service.logoutRedirect({
+          clientId: 'client-1',
+          postLogoutRedirectUri: 'https://evil.example/callback',
+        }),
+      ).resolves.toBeNull();
+    });
+
+    it('refuses a registered script URI', async () => {
+      const script = 'javascript://%0aalert(document.cookie)';
+      const { service } = setup(client({ urls: [script] }));
+
+      await expect(
+        service.logoutRedirect({
+          clientId: 'client-1',
+          postLogoutRedirectUri: script,
+        }),
+      ).resolves.toBeNull();
+    });
+  });
+
   describe('PKCE', () => {
     it('rejects a verifier that does not hash to the challenge', async () => {
       const { service } = setup();
@@ -199,6 +289,15 @@ describe('OauthService', () => {
           }),
         ),
       ).resolves.toEqual({ error: 'invalid_grant' });
+    });
+  });
+
+  describe('openid', () => {
+    it('issues codes for openid whatever idTokenAllowed says', async () => {
+      const { service } = setup(client({ idTokenAllowed: false }));
+      const { code } = await authorize(service, ['openid', 'name']);
+
+      expect(code).toEqual(expect.any(String));
     });
   });
 
@@ -351,11 +450,104 @@ describe('OauthService', () => {
         codeVerifier: VERIFIER,
       });
       expect(oauthRepository.createRefreshToken).toHaveBeenCalledWith(
-        expect.any(String),
+        expect.objectContaining({
+          scopes: ['openid', 'offline_access', 'name'],
+          userUuid: 'user-1',
+          clientUuid: 'client-1',
+          nonce: 'n-1',
+        }),
+      );
+    });
+  });
+
+  describe('id_token claims', () => {
+    it('carries the verification flags with the student id and phone number, as userinfo does', async () => {
+      const { service, oauthRepository, jwtService } = setup(
+        client({ scopes: ['student_id', 'phone_number'] }),
+      );
+      oauthRepository.findConsent.mockImplementation(() =>
+        Promise.resolve({ scopes: ['student_id', 'phone_number'] }),
+      );
+      const { code } = await authorize(service, [
+        'openid',
+        'student_id',
+        'phone_number',
+      ]);
+
+      await service.codeGrant({
+        grantType: 'authorization_code',
+        clientId: 'client-1',
+        code,
+        codeVerifier: VERIFIER,
+      });
+      expect(jwtService.sign).toHaveBeenCalledWith(
+        expect.objectContaining({
+          student_id: '20231234',
+          is_student_id_verified: true,
+          phone_number: '010-0000-0000',
+          is_phone_number_verified: false,
+        }),
+      );
+    });
+  });
+
+  describe('auth_time and amr', () => {
+    const auth = { authTime: 1_700_000_000, amr: ['hwk', 'user'] };
+
+    it('puts how the user signed in to the IdP into the id_token and the refresh token', async () => {
+      const { service, oauthRepository, jwtService } = setup();
+      const { code } = await authorize(
+        service,
         ['openid', 'offline_access', 'name'],
-        'user-1',
-        'client-1',
-        'n-1',
+        auth,
+      );
+
+      await service.codeGrant({
+        grantType: 'authorization_code',
+        clientId: 'client-1',
+        code,
+        codeVerifier: VERIFIER,
+      });
+      expect(jwtService.sign).toHaveBeenCalledWith(
+        expect.objectContaining({ auth_time: 1_700_000_000, amr: auth.amr }),
+      );
+      expect(oauthRepository.createRefreshToken).toHaveBeenCalledWith(
+        expect.objectContaining(auth),
+      );
+    });
+
+    it('keeps them when the refresh token grant issues a new id_token', async () => {
+      const { service, oauthRepository, jwtService } = setup();
+      oauthRepository.findRefreshTokenByToken.mockImplementation(() =>
+        Promise.resolve(
+          storedRefreshToken({
+            scopes: ['openid', 'offline_access'],
+            authTime: new Date(1_700_000_000_000),
+            amr: ['pwd'],
+          }),
+        ),
+      );
+
+      await service.refreshTokenGrant(refreshRequest);
+      expect(jwtService.sign).toHaveBeenCalledWith(
+        expect.objectContaining({ auth_time: 1_700_000_000, amr: ['pwd'] }),
+      );
+      expect(oauthRepository.rotateRefreshToken).toHaveBeenCalledWith(
+        'rt-1',
+        'family-1',
+        expect.objectContaining({ authTime: 1_700_000_000, amr: ['pwd'] }),
+      );
+    });
+
+    it('omits them for a session from before they were recorded', async () => {
+      const { service, oauthRepository, jwtService } = setup();
+      oauthRepository.findRefreshTokenByToken.mockImplementation(() =>
+        Promise.resolve(storedRefreshToken({ scopes: ['openid'] })),
+      );
+
+      await service.refreshTokenGrant(refreshRequest);
+      expect(jwtService.sign).toHaveBeenCalledWith(
+        expect.objectContaining({ auth_time: undefined, amr: undefined }),
       );
     });
   });
@@ -407,7 +599,7 @@ describe('OauthService', () => {
   });
 
   describe('refresh token rotation', () => {
-    it('keeps the rotated token as used and continues its family', async () => {
+    it('rotates the token and continues its family', async () => {
       const { service, oauthRepository } = setup();
       oauthRepository.findRefreshTokenByToken.mockImplementation(() =>
         Promise.resolve(storedRefreshToken()),
@@ -416,51 +608,36 @@ describe('OauthService', () => {
       const { refreshToken } = await service.refreshTokenGrant(refreshRequest);
       expect(typeof refreshToken).toBe('string');
 
-      expect(oauthRepository.markRefreshTokenUsed).toHaveBeenCalledWith('rt-1');
-      expect(oauthRepository.createRefreshToken).toHaveBeenCalledWith(
-        expect.any(String),
-        ['offline_access', 'name'],
-        'user-1',
-        'client-1',
-        undefined,
+      expect(oauthRepository.rotateRefreshToken).toHaveBeenCalledWith(
+        'rt-1',
         'family-1',
+        expect.objectContaining({
+          token: refreshToken,
+          scopes: ['offline_access', 'name'],
+          userUuid: 'user-1',
+          clientUuid: 'client-1',
+          nonce: null,
+          familyId: 'family-1',
+          authTime: undefined,
+          amr: undefined,
+        }),
       );
       expect(oauthRepository.deleteRefreshTokenByToken).not.toHaveBeenCalled();
-      expect(oauthRepository.deleteRefreshTokenFamily).not.toHaveBeenCalled();
     });
 
-    it('ends the whole family when a rotated token comes back', async () => {
+    it('issues nothing when the token was already used', async () => {
       const { service, oauthRepository, redis } = setup();
       oauthRepository.findRefreshTokenByToken.mockImplementation(() =>
         Promise.resolve(storedRefreshToken({ usedAt: new Date() })),
       );
-
-      await expect(
-        errorOf(service.refreshTokenGrant(refreshRequest)),
-      ).resolves.toEqual({ error: 'invalid_grant' });
-
-      expect(oauthRepository.deleteRefreshTokenFamily).toHaveBeenCalledWith(
-        'family-1',
-      );
-      expect(oauthRepository.createRefreshToken).not.toHaveBeenCalled();
-      expect(redis.size).toBe(0);
-    });
-
-    it('treats losing a race for the same token as reuse', async () => {
-      const { service, oauthRepository } = setup();
-      oauthRepository.findRefreshTokenByToken.mockImplementation(() =>
-        Promise.resolve(storedRefreshToken()),
-      );
-      oauthRepository.markRefreshTokenUsed.mockImplementation(() =>
+      oauthRepository.rotateRefreshToken.mockImplementation(() =>
         Promise.resolve(false),
       );
 
       await expect(
         errorOf(service.refreshTokenGrant(refreshRequest)),
       ).resolves.toEqual({ error: 'invalid_grant' });
-      expect(oauthRepository.deleteRefreshTokenFamily).toHaveBeenCalledWith(
-        'family-1',
-      );
+      expect(redis.size).toBe(0);
     });
 
     it('revokes the whole family when a refresh token is revoked', async () => {

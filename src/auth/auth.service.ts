@@ -18,7 +18,10 @@ import ms, { StringValue } from 'ms';
 import { AuthRepository } from './auth.repository';
 import { LoginDto } from './dto/req.dto';
 import { PasskeyAuthOptionResDto } from './dto/res.dto';
+import { AuthContext } from './types/authContext.type';
 import { LoginResultType } from './types/loginResult.type';
+
+type RefreshTokenCache = Pick<User, 'uuid'> & Partial<AuthContext>;
 
 @Injectable()
 @Loggable()
@@ -57,7 +60,7 @@ export class AuthService {
       throw new UnauthorizedException();
     }
 
-    return this.issueTokens(user.uuid);
+    return this.issueTokens(user.uuid, ['pwd']);
   }
 
   async logout(refreshToken: string): Promise<void> {
@@ -68,8 +71,8 @@ export class AuthService {
 
   async refresh(refreshToken: string): Promise<LoginResultType> {
     if (!refreshToken) throw new UnauthorizedException();
-    const cachedUser: Pick<User, 'uuid'> = await this.redisService
-      .getOrThrow<Pick<User, 'uuid'>>(refreshToken, {
+    const cachedUser = await this.redisService
+      .getOrThrow<RefreshTokenCache>(refreshToken, {
         prefix: this.refreshTokenPrefix,
       })
       .catch(() => {
@@ -83,17 +86,13 @@ export class AuthService {
     });
 
     const newRefreshToken: string = this.generateOpaqueToken();
-    void this.redisService.set<Pick<User, 'uuid'>>(
-      newRefreshToken,
-      cachedUser,
-      {
-        prefix: this.refreshTokenPrefix,
-        ttl: this.refreshTokenExpireTime,
-      },
-    );
+    void this.redisService.set<RefreshTokenCache>(newRefreshToken, cachedUser, {
+      prefix: this.refreshTokenPrefix,
+      ttl: this.refreshTokenExpireTime,
+    });
 
     return {
-      accessToken: this.jwtService.sign({}, { subject: user.uuid }),
+      accessToken: this.signAccessToken(user.uuid, cachedUser),
       refreshToken: newRefreshToken,
       accessTokenExpireTime: this.accessTokenExpireTime,
       refreshTokenExpireTime: this.refreshTokenExpireTime,
@@ -160,7 +159,8 @@ export class AuthService {
       authenticationInfo.newCounter,
     );
 
-    return this.issueTokens(authenticator.userUuid);
+    // requireUserVerification above makes the authenticator check the user too
+    return this.issueTokens(authenticator.userUuid, ['hwk', 'user']);
   }
 
   /**
@@ -174,12 +174,20 @@ export class AuthService {
       .replace(/[+//=]/g, '');
   }
 
-  private async issueTokens(uuid: string): Promise<LoginResultType> {
+  private async issueTokens(
+    uuid: string,
+    amr: string[],
+  ): Promise<LoginResultType> {
+    const auth: AuthContext = {
+      authTime: Math.floor(Date.now() / 1000),
+      amr,
+    };
     const refreshToken: string = this.generateOpaqueToken();
-    await this.redisService.set<Pick<User, 'uuid'>>(
+    await this.redisService.set<RefreshTokenCache>(
       refreshToken,
       {
         uuid,
+        ...auth,
       },
       {
         prefix: this.refreshTokenPrefix,
@@ -187,10 +195,21 @@ export class AuthService {
       },
     );
     return {
-      accessToken: this.jwtService.sign({}, { subject: uuid }),
+      accessToken: this.signAccessToken(uuid, auth),
       refreshToken,
       accessTokenExpireTime: this.accessTokenExpireTime,
       refreshTokenExpireTime: this.refreshTokenExpireTime,
     };
+  }
+
+  // sessions from before auth_time was kept have neither claim, and the id_token then omits them
+  private signAccessToken(
+    uuid: string,
+    { authTime, amr }: Partial<AuthContext>,
+  ): string {
+    return this.jwtService.sign(
+      { auth_time: authTime, amr },
+      { subject: uuid },
+    );
   }
 }
