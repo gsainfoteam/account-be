@@ -4,12 +4,14 @@ import { CacheNotFoundException, RedisService } from '@lib/redis';
 import {
   BadRequestException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Client, RefreshToken, User } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
+import { isUUID } from 'class-validator';
 import * as crypto from 'crypto';
 import { AuthContext } from 'src/auth/types/authContext.type';
 import { ClientService } from 'src/client/client.service';
@@ -617,21 +619,25 @@ export class OauthService {
 
     let user: User;
     if (tokenData.to === 'client') {
-      if (!userUuid) {
+      if (userUuid === undefined) {
         throw new UnauthorizedException();
       }
-      const consent = await this.oauthRepository.findConsent(
-        userUuid,
-        tokenData.clientId,
-      );
+      // an unknown user and one who never consented get the same 404, so a client cannot probe which subs exist
+      const consent = isUUID(userUuid)
+        ? await this.oauthRepository
+            .findConsent(userUuid, tokenData.clientId)
+            .catch((error: unknown) => {
+              if (error instanceof OauthTokenException) return null;
+              throw error;
+            })
+        : null;
       if (!consent) {
-        throw new UnauthorizedException();
+        throw new NotFoundException();
       }
-      consent.scopes.forEach((v) => {
-        if (!isScope(v) || !tokenData.scope.includes(v)) {
-          throw new UnauthorizedException();
-        }
-      });
+      // the token may carry optional scopes this user declined
+      tokenData.scope = tokenData.scope.filter((s) =>
+        consent.scopes.includes(s),
+      );
       user = await this.userService.findUserByUuid({
         uuid: userUuid,
       });
