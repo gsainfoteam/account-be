@@ -35,6 +35,12 @@ import {
 import { isScope, isTokenScope } from './types/scope.type';
 import { TokenCacheType } from './types/tokenCache.type';
 
+// client urls accept any scheme so native apps can register theirs, which also lets a javascript:// url through
+const SCRIPT_SCHEMES = ['javascript:', 'data:', 'vbscript:'];
+const isRedirectable = (registered: string[], uri: string): boolean =>
+  registered.includes(uri) &&
+  !SCRIPT_SCHEMES.includes(new URL(uri).protocol.toLowerCase());
+
 @Loggable()
 @Trace()
 @Injectable()
@@ -126,7 +132,7 @@ export class OauthService {
       .catch(() => {
         throw new OauthAuthorizeException('invalid_request');
       });
-    if (!client.urls.includes(redirectUri)) {
+    if (!isRedirectable(client.urls, redirectUri)) {
       throw new OauthAuthorizeException('invalid_request');
     }
 
@@ -245,7 +251,7 @@ export class OauthService {
     const client = await this.clientService
       .getClientByUuid(clientId)
       .catch(() => null);
-    if (!client?.urls.includes(redirectUri)) return null;
+    if (!client || !isRedirectable(client.urls, redirectUri)) return null;
 
     return new URL(redirectUri);
   }

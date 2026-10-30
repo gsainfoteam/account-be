@@ -260,6 +260,18 @@ describe('OauthService', () => {
         }),
       ).resolves.toBeNull();
     });
+
+    it('refuses a registered script URI', async () => {
+      const script = 'javascript://%0aalert(document.cookie)';
+      const { service } = setup(client({ urls: [script] }));
+
+      await expect(
+        service.logoutRedirect({
+          clientId: 'client-1',
+          postLogoutRedirectUri: script,
+        }),
+      ).resolves.toBeNull();
+    });
   });
 
   describe('PKCE', () => {
