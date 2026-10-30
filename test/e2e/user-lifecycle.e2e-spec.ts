@@ -7,6 +7,7 @@ import {
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
 import { Test } from '@nestjs/testing';
+import { generateKeyPairSync } from 'crypto';
 import request from 'supertest';
 
 import { AppModule } from '../../src/app.module';
@@ -57,6 +58,13 @@ describe('User Lifecycle Flow', () => {
   let currentPassword: string = TEST_DATA.USER.INITIAL_PASSWORD;
 
   const config = new MockConfigService();
+  // generated per run so no private key has to be committed
+  config.set(
+    'JWT_PRIVATE_KEY',
+    generateKeyPairSync('ec', { namedCurve: 'prime256v1' })
+      .privateKey.export({ type: 'pkcs8', format: 'pem' })
+      .toString(),
+  );
   // student id and phone number checks call outside services, so the test signs their results as VerifyService would
   const signVerification = (sub: string, hint: 'studentId' | 'phoneNumber') =>
     new JwtService({
