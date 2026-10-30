@@ -620,7 +620,7 @@ export class OauthService {
     let user: User;
     let scopes: readonly string[] = tokenData.scope;
     if (tokenData.to === 'client') {
-      if (!userUuid) {
+      if (userUuid === undefined) {
         throw new UnauthorizedException();
       }
       // an unknown user and one who never consented get the same 404, so a client cannot probe which subs exist

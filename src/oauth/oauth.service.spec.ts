@@ -712,6 +712,22 @@ describe('OauthService', () => {
       expect(info.phoneNumber).toBeUndefined();
     });
 
+    it('answers with the token scopes when the user consented to more', async () => {
+      const { service, redis, oauthRepository } = setup();
+      clientToken(redis, ['name']);
+      oauthRepository.findConsent.mockImplementationOnce(() =>
+        Promise.resolve({ scopes: ['name', 'phone_number'] }),
+      );
+
+      const info = await service.userinfo(
+        'ct',
+        '11111111-1111-4111-8111-111111111111',
+      );
+
+      expect(info.name).toBe('홍길동');
+      expect(info.phoneNumber).toBeUndefined();
+    });
+
     it('answers a user without a consent record and a sub that is not a uuid alike', async () => {
       const { service, redis, oauthRepository } = setup();
       clientToken(redis, ['name']);
@@ -723,6 +739,9 @@ describe('OauthService', () => {
         service.userinfo('ct', '11111111-1111-4111-8111-111111111111'),
       ).rejects.toBeInstanceOf(NotFoundException);
       await expect(service.userinfo('ct', 'not-a-uuid')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      await expect(service.userinfo('ct', '')).rejects.toBeInstanceOf(
         NotFoundException,
       );
     });
