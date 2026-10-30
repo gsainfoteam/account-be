@@ -20,8 +20,11 @@ const token = (value: string) => ({
 const familySize = () => prisma.refreshToken.count({ where: { familyId } });
 
 // holds the family lock and inserts a token, as a rotation does, then starts `remove` before committing.
-// an unlocked remove finishes before the commit; a locked one waits for it, so the timeout only keeps it moving
-async function removeDuringRotation(remove: () => Promise<unknown>) {
+// a locked remove blocks until this commit, so only an unlocked one can be awaited inside the transaction
+async function removeDuringRotation(
+  remove: () => Promise<unknown>,
+  { locked }: { locked: boolean },
+) {
   await repository.createRefreshToken(token('presented'));
   let removal: Promise<unknown> = Promise.resolve();
   await prisma.$transaction(async (tx) => {
@@ -30,7 +33,7 @@ async function removeDuringRotation(remove: () => Promise<unknown>) {
       data: { ...token('next'), expiresAt: new Date(Date.now() + 60_000) },
     });
     removal = remove();
-    await Promise.race([removal, sleep(300)]);
+    await (locked ? sleep(300) : removal);
   });
   await removal;
   return familySize();
@@ -95,14 +98,18 @@ describe('refresh token family', () => {
 
   it('deletes a token that a rotation commits while the family is being deleted', async () => {
     await expect(
-      removeDuringRotation(() => repository.deleteRefreshTokenFamily(familyId)),
+      removeDuringRotation(
+        () => repository.deleteRefreshTokenFamily(familyId),
+        { locked: true },
+      ),
     ).resolves.toBe(0);
   });
 
   it('would miss that token without the family lock', async () => {
     await expect(
-      removeDuringRotation(() =>
-        prisma.refreshToken.deleteMany({ where: { familyId } }),
+      removeDuringRotation(
+        () => prisma.refreshToken.deleteMany({ where: { familyId } }),
+        { locked: false },
       ),
     ).resolves.toBe(1);
   });
