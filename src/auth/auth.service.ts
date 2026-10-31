@@ -1,3 +1,4 @@
+import { AMR } from '@gsainfoteam/account-contract';
 import { Trace } from '@gsainfoteam/nest-observability';
 import { Loggable } from '@lib/logger/decorator/loggable';
 import { ObjectService } from '@lib/object';
@@ -60,7 +61,7 @@ export class AuthService {
       throw new UnauthorizedException();
     }
 
-    return this.issueTokens(user.uuid, ['pwd']);
+    return this.issueTokens(user.uuid, [...AMR.password]);
   }
 
   async logout(refreshToken: string): Promise<void> {
@@ -160,7 +161,7 @@ export class AuthService {
     );
 
     // requireUserVerification above makes the authenticator check the user too
-    return this.issueTokens(authenticator.userUuid, ['hwk', 'user']);
+    return this.issueTokens(authenticator.userUuid, [...AMR.passkey]);
   }
 
   /**

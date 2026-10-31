@@ -1,3 +1,7 @@
+import {
+  type AuthorizeErrorCode,
+  DENIAL_REASONS,
+} from '@gsainfoteam/account-contract';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Expose, Transform } from 'class-transformer';
 import {
@@ -150,7 +154,7 @@ export class TokenReqDto {
   })
   @IsString()
   @Transform(({ value }) => {
-    if (GrantTypeList.includes(value as string)) return value as GrantType;
+    if (GrantTypeList.some((type) => type === value)) return value as GrantType;
     throw new OauthTokenException('unsupported_grant_type');
   })
   grantType: GrantType;
@@ -282,14 +286,9 @@ export const ReportedAuthorizeErrorList = [
   'consent_required',
   'interaction_required',
   'server_error',
-] as const;
+] as const satisfies readonly AuthorizeErrorCode[];
 /** reasons account-fe puts in error_description, kept to a closed list so arbitrary text never reaches the client */
-export const DenialReasonList = [
-  'user_cancelled',
-  'verification_required',
-  'consent_required',
-  'login_required',
-] as const;
+export const DenialReasonList = DENIAL_REASONS;
 
 export class AuthorizeErrorReqDto {
   @ApiProperty({ name: 'client_id' })

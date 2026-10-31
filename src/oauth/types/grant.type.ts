@@ -1,12 +1,9 @@
+import { GRANT_TYPES, type GrantType } from '@gsainfoteam/account-contract';
+
 import { ScopeType } from './scope.type';
 
-export const GrantTypeList = [
-  'authorization_code',
-  'client_credentials',
-  'refresh_token',
-];
-
-export type GrantType = (typeof GrantTypeList)[number];
+export const GrantTypeList = GRANT_TYPES;
+export type { GrantType };
 
 export type GrantContentType =
   | CodeGrantContentType

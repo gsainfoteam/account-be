@@ -1,9 +1,14 @@
+import {
+  CODE_CHALLENGE_METHOD,
+  GRANT_TYPES,
+  IDP_PAGE_PATHS,
+  SCOPE_CLAIMS,
+  SCOPES,
+  TOKEN_ENDPOINT_AUTH_METHODS,
+} from '@gsainfoteam/account-contract';
 import { Trace } from '@gsainfoteam/nest-observability';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ClientScopeList } from 'src/client/types/clientScopes.type';
-import { CodeChallengeMethodList } from 'src/oauth/types/codeChallengeMethod.type';
-import { ScopeList } from 'src/oauth/types/scope.type';
 
 @Injectable()
 @Trace()
@@ -23,10 +28,13 @@ export class WellKnownService {
     return {
       issuer: this.issuer,
       authorization_endpoint: new URL(
-        '/authorize',
+        IDP_PAGE_PATHS.authorize,
         this.loginOrigin,
       ).toString(),
-      end_session_endpoint: new URL('/logout', this.loginOrigin).toString(),
+      end_session_endpoint: new URL(
+        IDP_PAGE_PATHS.logout,
+        this.loginOrigin,
+      ).toString(),
       token_endpoint: `${this.baseUrl}/oauth/token`,
       userinfo_endpoint: `${this.baseUrl}/oauth/userinfo`,
       jwks_uri: `${this.baseUrl}/oauth/certs`,
@@ -34,18 +42,10 @@ export class WellKnownService {
       response_types_supported: ['code'],
       subject_types_supported: ['public'],
       id_token_signing_alg_values_supported: ['ES256'],
-      scopes_supported: ScopeList,
-      code_challenge_methods_supported: CodeChallengeMethodList,
-      token_endpoint_auth_methods_supported: [
-        'none',
-        'client_secret_basic',
-        'client_secret_post',
-      ],
-      revocation_endpoint_auth_methods_supported: [
-        'none',
-        'client_secret_basic',
-        'client_secret_post',
-      ],
+      scopes_supported: SCOPES,
+      code_challenge_methods_supported: [CODE_CHALLENGE_METHOD],
+      token_endpoint_auth_methods_supported: TOKEN_ENDPOINT_AUTH_METHODS,
+      revocation_endpoint_auth_methods_supported: TOKEN_ENDPOINT_AUTH_METHODS,
       claims_supported: [
         'sub',
         'aud',
@@ -55,13 +55,9 @@ export class WellKnownService {
         'auth_time',
         'amr',
         'nonce',
-        ...ClientScopeList,
+        ...new Set(Object.values(SCOPE_CLAIMS).flat()),
       ],
-      grant_types_supported: [
-        'authorization_code',
-        'refresh_token',
-        'client_credentials',
-      ],
+      grant_types_supported: GRANT_TYPES,
     };
   }
 }

@@ -36,6 +36,7 @@ import {
 } from './types/grant.type';
 import { isScope, isTokenScope } from './types/scope.type';
 import { TokenCacheType } from './types/tokenCache.type';
+import { userClaims } from './user-claims';
 
 // client urls accept any scheme so native apps can register theirs, which also lets a javascript:// url through
 const SCRIPT_SCHEMES = ['javascript:', 'data:', 'vbscript:'];
@@ -355,22 +356,7 @@ export class OauthService {
         auth_time: cache.authTime,
         amr: cache.amr,
         scope: cache.scope.join(' '),
-        profile: cache.scope.includes('profile') ? user.profile : undefined,
-        picture: cache.scope.includes('picture') ? user.picture : undefined,
-        name: cache.scope.includes('name') ? user.name : undefined,
-        email: cache.scope.includes('email') ? user.email : undefined,
-        student_id: cache.scope.includes('student_id')
-          ? user.studentId
-          : undefined,
-        is_student_id_verified: cache.scope.includes('student_id')
-          ? user.isIdVerified
-          : undefined,
-        phone_number: cache.scope.includes('phone_number')
-          ? user.phoneNumber
-          : undefined,
-        is_phone_number_verified: cache.scope.includes('phone_number')
-          ? user.isPhoneNumberVerified
-          : undefined,
+        ...userClaims(user, cache.scope),
       });
     }
 
@@ -462,20 +448,7 @@ export class OauthService {
         nonce: refreshTokenData.nonce ?? undefined,
         auth_time: auth.authTime,
         amr: auth.amr,
-        profile: scopes.includes('profile') ? user.profile : undefined,
-        picture: scopes.includes('picture') ? user.picture : undefined,
-        name: scopes.includes('name') ? user.name : undefined,
-        email: scopes.includes('email') ? user.email : undefined,
-        student_id: scopes.includes('student_id') ? user.studentId : undefined,
-        is_student_id_verified: scopes.includes('student_id')
-          ? user.isIdVerified
-          : undefined,
-        phone_number: scopes.includes('phone_number')
-          ? user.phoneNumber
-          : undefined,
-        is_phone_number_verified: scopes.includes('phone_number')
-          ? user.isPhoneNumberVerified
-          : undefined,
+        ...userClaims(user, scopes),
       });
     }
 
@@ -650,24 +623,17 @@ export class OauthService {
       });
     }
 
+    const claims = userClaims(user, tokenData.scope);
     return {
       sub: user.uuid,
-      name: tokenData.scope.includes('name') ? user.name : undefined,
-      profile: tokenData.scope.includes('profile') ? user.profile : undefined,
-      picture: tokenData.scope.includes('picture') ? user.picture : undefined,
-      email: tokenData.scope.includes('email') ? user.email : undefined,
-      studentId: tokenData.scope.includes('student_id')
-        ? user.studentId
-        : undefined,
-      isStudentIdVerified: tokenData.scope.includes('student_id')
-        ? user.isIdVerified
-        : undefined,
-      phoneNumber: tokenData.scope.includes('phone_number')
-        ? user.phoneNumber
-        : undefined,
-      isPhoneNumberVerified: tokenData.scope.includes('phone_number')
-        ? user.isPhoneNumberVerified
-        : undefined,
+      name: claims.name,
+      profile: claims.profile,
+      picture: claims.picture,
+      email: claims.email,
+      studentId: claims.student_id,
+      isStudentIdVerified: claims.is_student_id_verified,
+      phoneNumber: claims.phone_number,
+      isPhoneNumberVerified: claims.is_phone_number_verified,
     };
   }
 
