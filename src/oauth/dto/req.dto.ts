@@ -281,6 +281,7 @@ export const ReportedAuthorizeErrorList = [
   'login_required',
   'consent_required',
   'interaction_required',
+  'server_error',
 ] as const;
 /** reasons account-fe puts in error_description, kept to a closed list so arbitrary text never reaches the client */
 export const DenialReasonList = [

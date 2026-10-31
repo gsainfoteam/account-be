@@ -25,7 +25,7 @@ import {
 import { TokenResDto, UserInfoResDto } from './dto/res.dto';
 import { OauthAuthorizeException } from './exceptions/oauth.authorize.exception';
 import { OauthTokenException } from './exceptions/oauth.token.exception';
-import { OauthRepository } from './oauth.repository';
+import { MAX_REFRESH_TOKEN_AGE, OauthRepository } from './oauth.repository';
 import { AuthorizeError } from './types/authorizationError.type';
 import { AuthorizeCacheType } from './types/authorizeCache.type';
 import {
@@ -379,7 +379,7 @@ export class OauthService {
       tokenType: 'Bearer',
       expiresIn: 3 * 60 * 60, // 3 hours
       refreshToken: refreshToken,
-      refreshTokenExpiresIn: 3 * 30 * 24 * 60 * 60, // 3 months
+      refreshTokenExpiresIn: MAX_REFRESH_TOKEN_AGE,
       idToken,
       scope: cache.scope,
     };
@@ -484,7 +484,7 @@ export class OauthService {
       tokenType: 'Bearer',
       expiresIn: 3 * 60 * 60, // 3 hours
       refreshToken: newRefreshToken,
-      refreshTokenExpiresIn: 3 * 30 * 24 * 60 * 60, // 3 months
+      refreshTokenExpiresIn: MAX_REFRESH_TOKEN_AGE,
       idToken,
       scope: scopes,
     };

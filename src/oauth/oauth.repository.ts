@@ -12,7 +12,7 @@ import { AuthContext } from 'src/auth/types/authContext.type';
 
 import { OauthTokenException } from './exceptions/oauth.token.exception';
 
-const MAX_REFRESH_TOKEN_AGE = 60 * 60 * 24 * 30; // 30 days
+export const MAX_REFRESH_TOKEN_AGE = 60 * 60 * 24 * 30; // 30 days
 
 type NewRefreshToken = Pick<
   RefreshToken,
