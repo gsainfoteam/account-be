@@ -1,10 +1,15 @@
-import { ClientScopeList } from 'src/client/types/clientScopes.type';
+import {
+  type Scope,
+  SCOPES,
+  TOKEN_SCOPES,
+  type TokenScope,
+} from '@gsainfoteam/account-contract';
 
-export const TokenScopeList = ['openid', 'offline_access'] as const;
-export type TokenScopeType = (typeof TokenScopeList)[number];
+export const TokenScopeList = TOKEN_SCOPES;
+export type TokenScopeType = TokenScope;
 
-export const ScopeList = [...ClientScopeList, ...TokenScopeList] as const;
-export type ScopeType = (typeof ScopeList)[number];
+export const ScopeList = SCOPES;
+export type ScopeType = Scope;
 
 export function isTokenScope(value: string): value is TokenScopeType {
   return TokenScopeList.some((scope) => scope === value);

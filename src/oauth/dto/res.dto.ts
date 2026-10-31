@@ -98,14 +98,14 @@ export class UserInfoResDto {
     description: 'profile url',
     required: false,
   })
-  profile?: string | null;
+  profile?: string;
 
   @ApiPropertyOptional({
     example: 'https://bucket.s3.ap-northeast-2.amazonaws.com/1626740269.webp',
     description: 'profile image url',
     required: false,
   })
-  picture?: string | null;
+  picture?: string;
 
   @ApiPropertyOptional({
     example: 'johnDoe',
