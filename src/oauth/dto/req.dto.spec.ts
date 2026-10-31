@@ -1,7 +1,7 @@
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 
-import { AuthorizationReqDto } from './req.dto';
+import { AuthorizationReqDto, AuthorizeErrorReqDto } from './req.dto';
 
 function errorsFor(codeChallengeMethod: string) {
   return validate(
@@ -26,5 +26,18 @@ describe('AuthorizationReqDto', () => {
     expect(errors.map((error) => error.property)).toEqual([
       'codeChallengeMethod',
     ]);
+  });
+});
+
+describe('AuthorizeErrorReqDto', () => {
+  it('accepts server_error, which account-fe reports when it cannot look up consent for prompt=none', async () => {
+    const errors = await validate(
+      plainToInstance(AuthorizeErrorReqDto, {
+        client_id: 'client-1',
+        redirect_uri: 'https://app.example/callback',
+        error: 'server_error',
+      }),
+    );
+    expect(errors).toHaveLength(0);
   });
 });
