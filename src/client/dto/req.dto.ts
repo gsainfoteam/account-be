@@ -67,6 +67,8 @@ export class UpdateClientDto {
   urls?: string[];
 
   @ApiPropertyOptional({
+    enum: ClientScopeList,
+    isArray: true,
     description: 'The scopes which the client uses',
     example: ['email'],
   })
@@ -77,6 +79,8 @@ export class UpdateClientDto {
   scopes?: ClientScopeType[];
 
   @ApiPropertyOptional({
+    enum: ClientScopeList,
+    isArray: true,
     description: 'The scopes which the client might uses',
     example: ['student_id'],
   })
