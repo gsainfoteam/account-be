@@ -2,6 +2,8 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Client, RoleType, TokenEndpointAuthMethod } from '@prisma/client';
 import { Exclude, Expose } from 'class-transformer';
 
+import { ClientScopeList } from '../types/clientScopes.type';
+
 export class ClientResDto implements Client {
   @ApiProperty({
     description: 'The UUID of the client',
@@ -46,12 +48,16 @@ export class ClientResDto implements Client {
   updatedAt: Date;
 
   @ApiProperty({
+    enum: ClientScopeList,
+    isArray: true,
     description: "the scope which need to use the client's service",
     example: ['profile', 'email'],
   })
   scopes: string[];
 
   @ApiProperty({
+    enum: ClientScopeList,
+    isArray: true,
     description: "the scope whether need or not in the client's service",
     example: ['student_id'],
   })
@@ -121,12 +127,16 @@ export class ClientPublicResDto implements Client {
   createdAt: Date;
 
   @ApiProperty({
+    enum: ClientScopeList,
+    isArray: true,
     description: "The scope which need to use the client's service",
     example: ['profile', 'email'],
   })
   scopes: string[];
 
   @ApiProperty({
+    enum: ClientScopeList,
+    isArray: true,
     description: "The scope whether need or not in the client's service",
     example: ['student_id'],
   })
