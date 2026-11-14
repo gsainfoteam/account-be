@@ -252,7 +252,26 @@ export class VerifyService {
     if (phoneNumber !== this.appleTestPhoneNumber) {
       if (tel.country === 'KR') {
         const msg = `인포팀 계정 인증코드: [${phoneNumberVerificationCode}] 공유하지 마십시오.`;
-        await this.smsService.sendDomesticMessage(tel.formatNational(), msg);
+        const receiver = tel.formatNational();
+        const alimtalkReceiver = receiver.replace(/\D/g, '');
+        if (this.smsService.isAlimtalkEnabled) {
+          // 알림톡 템플릿(ALIGO_KAKAO_TEMPLATE_CODE)과 개행까지 동일해야 한다.
+          // 알림톡 발송에 실패하면 SMS로 대체 발송한다.
+          await this.smsService
+            .sendAlimtalk(
+              alimtalkReceiver,
+              `인포팀 계정 인증코드:\n[${phoneNumberVerificationCode}]\n\n공유하지 마십시오.`,
+              msg,
+            )
+            .catch(async (error) => {
+              this.logger.warn(
+                `alimtalk failed, falling back to SMS: ${error}`,
+              );
+              await this.smsService.sendDomesticMessage(receiver, msg);
+            });
+        } else {
+          await this.smsService.sendDomesticMessage(receiver, msg);
+        }
       } else {
         const msg = `Infoteam Account verification code: [${phoneNumberVerificationCode}]. Do not share this code with anyone.`;
         await this.smsService.sendInternationalMessage(
